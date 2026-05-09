@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Personal health data
+*.zip
+electrocardiograms/
+*.csv
+*.xml
+export_cda.xml
+导出.xml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log

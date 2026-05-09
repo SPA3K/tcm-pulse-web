@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>岐黄脉镜 — AI中医脉诊</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <script src="https://unpkg.com/fflate@0.8.2/umd/index.js"></script>
+    <style>
+        :root { --tcm-red: #8B2500; --tcm-gold: #B8860B; --tcm-ink: #2C3E50; --tcm-paper: #FAFAF5; }
+        body { background: var(--tcm-paper); }
+        .tcm-title { font-family: 'STKaiti', 'KaiTi', serif; }
+        .tcm-accent { color: var(--tcm-red); }
+        .step-card { border-left: 3px solid var(--tcm-gold); }
+        .confidence-bar { height: 6px; border-radius: 3px; background: #E5E7EB; }
+        .confidence-fill { height: 100%; border-radius: 3px; background: linear-gradient(to right, #B8860B, #8B2500); }
+        .page { display: none; } .page.active { display: block; }
+        .tab-btn { transition: all 0.2s; }
+        .tab-btn.active { color: var(--tcm-red); border-bottom: 2px solid var(--tcm-red); }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-red-800 to-amber-700 flex items-center justify-center">
+                    <span class="text-white text-lg tcm-title">脉</span>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tcm-title tcm-accent">岐黄脉镜</h1>
+                    <p class="text-xs text-gray-500">AI 中医脉诊分析系统</p>
+                </div>
+            </div>
+            <nav class="flex gap-4">
+                <button onclick="showPage('analysis')" class="tab-btn active text-sm py-1 px-2" id="tab-analysis">脉象分析</button>
+                <button onclick="showPage('home')" class="tab-btn text-sm py-1 px-2 text-gray-500" id="tab-home">数据采集</button>
+                <button onclick="showPage('guide')" class="tab-btn text-sm py-1 px-2 text-gray-500" id="tab-guide">原理说明</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-4 py-8">
+
+        <!-- ==================== DATA COLLECTION PAGE ==================== -->
+        <div id="page-home" class="page">
+            <h2 class="text-2xl font-bold tcm-title mb-6">数据采集</h2>
+
+            <!-- Key Info Table -->
+            <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+                <h3 class="font-bold text-lg mb-4">哪些数据需要手动触发？</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead><tr class="border-b border-gray-200">
+                            <th class="text-left py-2 pr-4">数据类型</th>
+                            <th class="text-left py-2 pr-4">是否自动</th>
+                            <th class="text-left py-2">说明</th>
+                        </tr></thead>
+                        <tbody class="text-gray-700">
+                            <tr class="border-b border-gray-100">
+                                <td class="py-3 pr-4 font-medium">心率 BPM</td>
+                                <td class="py-3 pr-4"><span class="text-green-600 font-medium">✓ 自动</span></td>
+                                <td class="py-3">全天后台采集（静息约1次/分钟，运动时1次/秒）</td>
+                            </tr>
+                            <tr class="border-b border-gray-100">
+                                <td class="py-3 pr-4 font-medium">HRV 心率变异</td>
+                                <td class="py-3 pr-4"><span class="text-green-600 font-medium">✓ 自动</span></td>
+                                <td class="py-3">睡眠和静息时自动测量（每3-5分钟）</td>
+                            </tr>
+                            <tr class="border-b border-gray-100">
+                                <td class="py-3 pr-4 font-medium">
+                                    <div class="flex items-center gap-2">
+                                        <svg width="20" height="20" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" class="flex-shrink-0">
+                                            <rect width="100" height="100" rx="10" fill="white"/>
+                                            <polyline points="10,50 25,50 30,30 40,70 50,40 60,60 70,50 90,50"
+                                                      fill="none" stroke="#f5576c" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                        <span>ECG 心电图（移动房颤心电图记录）</span>
+                                    </div>
+                                </td>
+                                <td class="py-3 pr-4"><span class="tcm-accent font-bold">✗ 需手动</span></td>
+                                <td class="py-3">打开手表 ECG App → 手指触摸表冠 → 录制30秒</td>
+                            </tr>
+                            <tr>
+                                <td class="py-3 pr-4 font-medium">呼吸率</td>
+                                <td class="py-3 pr-4"><span class="text-green-600 font-medium">✓ 自动</span></td>
+                                <td class="py-3">佩戴入睡时自动记录</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 text-sm bg-amber-50 p-4 rounded-lg">
+                    💡 <strong>ECG 是脉象分析的核心数据</strong>——提供 512Hz 波形，能分析振幅、节律、形态。仅有心率+HRV 只能判定~5种脉象，加上ECG可判定11种。
+                </div>
+            </div>
+
+            <!-- Step by step -->
+            <div class="space-y-4 mb-8">
+                <h3 class="font-bold text-lg">操作流程</h3>
+
+                <div class="step-card bg-white rounded-r-xl p-5 pl-6">
+                    <div class="flex items-start gap-3">
+                        <span class="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-bold">1</span>
+                        <div>
+                            <p class="font-medium text-lg">静坐放松 5 分钟</p>
+                            <p class="text-gray-500 mt-1">让心率回到静息状态。运动后立即测量会导致"数脉"（快脉）误判。</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="step-card bg-white rounded-r-xl p-5 pl-6">
+                    <div class="flex items-start gap-3">
+                        <span class="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-bold">2</span>
+                        <div>
+                            <p class="font-medium text-lg">录制 ECG 心电图</p>
+                            <div class="mt-2 space-y-2 text-gray-600">
+                                <p>① 在 Apple Watch 上打开 <strong>ECG App</strong>（红白心形图标）</p>
+                                <p>② 将<strong>另一只手的食指</strong>按住手表侧面的<strong>数码表冠</strong>（旋钮）</p>
+                                <p>③ 保持不动，等待 <strong>30 秒</strong>倒计时结束</p>
+                                <p>④ 建议连续录制 <strong>2-3 次</strong>作为对照</p>
+                            </div>
+                            <p class="text-xs text-gray-400 mt-3">⚠️ 需要 Apple Watch Series 4 及以上，且所在地区已开放 ECG 功能</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="step-card bg-white rounded-r-xl p-5 pl-6">
+                    <div class="flex items-start gap-3">
+                        <span class="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-bold">3</span>
+                        <div>
+                            <p class="font-medium text-lg">从 iPhone 导出健康数据</p>
+                            <div class="mt-2 space-y-2 text-gray-600">
+                                <p>① 打开 iPhone 上的 <strong>健康</strong> App</p>
+                                <p>② 点击右上角 <strong>个人头像</strong></p>
+                                <p>③ 滚动到底部，点击 <strong>"导出所有健康数据"</strong></p>
+                                <p>④ 等待生成（可能需要几分钟）→ 选择保存/分享方式</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="step-card bg-white rounded-r-xl p-5 pl-6">
+                    <div class="flex items-start gap-3">
+                        <span class="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-bold">4</span>
+                        <div>
+                            <p class="font-medium text-lg">上传分析</p>
+                            <div class="mt-2 space-y-2 text-gray-600">
+                                <p>在<strong>脉象分析</strong>页面点击<strong>"加载导出文件"</strong>按钮</p>
+                                <p>选择 zip 压缩包或解压后的 .csv 文件即可开始分析</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FAQ -->
+            <div class="bg-gray-50 rounded-xl p-6 border border-gray-200">
+                <h4 class="font-bold mb-3">常见问题</h4>
+                <div class="space-y-3 text-sm text-gray-700">
+                    <div><strong>Q: 手表不支持 ECG 怎么办？</strong><br>A: 仅用心率+HRV可覆盖约5种脉象（迟/数/疾/弦/缓），准确度较低但仍有参考。</div>
+                    <div><strong>Q: 需要每次都导出全部数据吗？</strong><br>A: 只需上传 electrocardiograms/ 中最新的 .csv 文件即可。</div>
+                    <div><strong>Q: 数据安全吗？</strong><br>A: 纯本地处理，数据不离开你的设备。</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== GUIDE PAGE (原理说明) ==================== -->
+        <div id="page-guide" class="page">
+            <h2 class="text-2xl font-bold tcm-title mb-6">原理说明</h2>
+            <p class="text-gray-600 mb-6">本系统从 Apple Watch ECG 波形中提取18维特征，映射到中医脉诊的五大维度，判定11种脉象类型并推断体质。</p>
+
+            <!-- 28 Pulse Types (moved here from home) -->
+            <section class="mt-8">
+                <h2 class="text-2xl font-bold tcm-title mb-4">二十八脉概览</h2>
+                <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="text-left py-3 px-4">脉象</th>
+                                    <th class="text-left py-3 px-4 hidden md:table-cell">释义</th>
+                                    <th class="text-left py-3 px-4">比喻</th>
+                                    <th class="text-left py-3 px-4">可测</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pulse-table"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Quick stats -->
+            <section class="grid grid-cols-3 gap-3 mt-6 mb-6">
+                <div class="bg-white rounded-xl p-4 border border-gray-200 text-center">
+                    <p class="text-2xl font-bold tcm-accent">11</p>
+                    <p class="text-xs text-gray-500">可识别脉象</p>
+                </div>
+                <div class="bg-white rounded-xl p-4 border border-gray-200 text-center">
+                    <p class="text-2xl font-bold tcm-accent">18</p>
+                    <p class="text-xs text-gray-500">维特征分析</p>
+                </div>
+                <div class="bg-white rounded-xl p-4 border border-gray-200 text-center">
+                    <p class="text-2xl font-bold tcm-accent">5</p>
+                    <p class="text-xs text-gray-500">分析维度</p>
+                </div>
+            </section>
+        </div>
+
+        <!-- ==================== ANALYSIS PAGE (now primary/home) ==================== -->
+        <div id="page-analysis" class="page active">
+            <!-- No data state -->
+            <div id="no-data" class="text-center py-12">
+                <p class="text-gray-400 text-lg mb-4">暂无分析数据</p>
+                <button onclick="document.getElementById('file-input').click()" class="px-6 py-2 bg-amber-700 text-white rounded-lg hover:bg-red-800 transition mb-4">加载导出文件</button>
+                <input type="file" id="file-input" class="hidden" accept=".csv,.zip">
+                <p class="text-xs text-gray-500 mb-2">支持 .zip 或 .csv 格式</p>
+                <p class="text-xs text-amber-600">💡 建议：解压后直接上传 electrocardiograms/*.csv 文件更快</p>
+
+                <!-- Upload status -->
+                <div id="upload-status" class="mt-4 hidden max-w-md mx-auto">
+                    <div class="flex items-center gap-3 p-4 bg-amber-50 rounded-lg border border-amber-200">
+                        <div class="animate-spin w-5 h-5 border-2 border-amber-700 border-t-transparent rounded-full"></div>
+                        <span id="status-text" class="text-amber-800">正在解析...</span>
+                    </div>
+                </div>
+                <div id="upload-error" class="mt-4 hidden max-w-md mx-auto">
+                    <div class="p-4 bg-red-50 rounded-lg border border-red-200 text-red-700"><span id="error-text"></span></div>
+                </div>
+
+                <div class="text-left max-w-2xl mx-auto mt-8 border-t border-gray-100 pt-8">
+                    <h3 class="text-lg font-bold tcm-title mb-4">分析后你将获得</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div class="bg-white rounded-xl p-4 border border-gray-200">
+                            <p class="font-medium tcm-accent mb-2">🏷️ 脉象体质标签</p>
+                            <p class="text-gray-600">基于六维分析（气速/气势/气张/气律/气稳/气韵），判定你的五行卦象体质类型，如"离火·阳盛型"、"巽风·气郁型"等20种分型。</p>
+                        </div>
+                        <div class="bg-white rounded-xl p-4 border border-gray-200">
+                            <p class="font-medium tcm-accent mb-2">📋 体质解读</p>
+                            <p class="text-gray-600">每种体质附带详细的身体表现描述、成因分析，以及对应的中医调养建议（饮食、起居、情志）。</p>
+                        </div>
+                        <div class="bg-white rounded-xl p-4 border border-gray-200">
+                            <p class="font-medium tcm-accent mb-2">📊 五维雷达图</p>
+                            <p class="text-gray-600">频率（迟/数）、节律（促/结/代）、振幅（洪/细）、张力（弦/缓）、流畅度（滑/涩）五个维度的可视化评估。</p>
+                        </div>
+                        <div class="bg-white rounded-xl p-4 border border-gray-200">
+                            <p class="font-medium tcm-accent mb-2">💓 脉象分类</p>
+                            <p class="text-gray-600">识别11种中医脉象，包括主脉判定、兼脉分析、相兼脉组合解读，附带置信度和临床意义。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results -->
+            <div id="results" class="hidden">
+                <!-- Primary diagnosis -->
+                <section class="bg-white rounded-2xl border border-gray-200 p-6 md:p-8 mb-6">
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <h2 class="text-3xl font-bold tcm-title tcm-accent" id="primary-title">—</h2>
+                            <p class="text-gray-500 mt-1" id="primary-english">—</p>
+                        </div>
+                        <span class="text-2xl font-bold text-amber-700" id="primary-confidence-text">—</span>
+                    </div>
+                    <div class="flex items-center gap-3 mt-4">
+                        <div class="flex-1 confidence-bar"><div class="confidence-fill" id="primary-confidence-bar" style="width:0%"></div></div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4 mt-5 space-y-2">
+                        <p class="text-sm text-gray-700"><strong>判定依据：</strong><span id="primary-evidence">—</span></p>
+                        <p class="text-sm text-gray-700"><strong>临床意义：</strong><span id="primary-meaning">—</span></p>
+                    </div>
+                </section>
+
+                <!-- Constitution Card -->
+                <section id="constitution-section" class="bg-white rounded-2xl border border-gray-200 p-6 md:p-8 mb-6 hidden">
+                    <div class="flex items-center gap-2 mb-4">
+                        <span class="text-sm text-gray-500">脉象体质</span>
+                    </div>
+                    <div class="flex items-center gap-4 mb-4">
+                        <div class="w-16 h-16 rounded-full border-2 flex items-center justify-center" id="const-hexagram" style="border-color:#B8860B">
+                            <span class="text-2xl tcm-title" id="const-element" style="color:#B8860B">土</span>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold tcm-title" id="const-type">—</h3>
+                            <div class="mt-1 flex flex-wrap gap-1" id="const-dims"></div>
+                        </div>
+                    </div>
+                    <p class="text-gray-800 text-sm leading-relaxed mb-3 italic" id="const-portrait">—</p>
+                    <p class="text-gray-600 text-sm leading-relaxed" id="const-desc">—</p>
+                    <div class="mt-4 bg-green-50 rounded-lg p-4 border border-green-100">
+                        <p class="text-sm text-green-800"><strong>调养建议：</strong><span id="const-advice">—</span></p>
+                    </div>
+                </section>
+
+                <!-- Secondary -->
+                <section id="secondary-section" class="mb-6 hidden">
+                    <h3 class="text-lg font-bold tcm-title mb-3">兼脉</h3>
+                    <div id="secondary-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+                </section>
+
+                <!-- Charts -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <section class="bg-white rounded-2xl border border-gray-200 p-6">
+                        <h3 class="text-lg font-bold tcm-title mb-4">五维脉象图</h3>
+                        <div class="aspect-square max-w-[280px] mx-auto"><canvas id="radar-chart"></canvas></div>
+                    </section>
+                    <section class="bg-white rounded-2xl border border-gray-200 p-6">
+                        <h3 class="text-lg font-bold tcm-title mb-4">关键指标</h3>
+                        <div class="space-y-2" id="metrics-list"></div>
+                    </section>
+                </div>
+
+                <!-- ECG -->
+                <section id="ecg-section" class="bg-white rounded-2xl border border-gray-200 p-6 mb-6 hidden">
+                    <h3 class="text-lg font-bold tcm-title mb-4">ECG 波形</h3>
+                    <div class="w-full overflow-x-auto"><canvas id="ecg-chart" height="150"></canvas></div>
+                </section>
+
+                <!-- Disclaimer -->
+                <section class="text-center text-sm text-gray-400 py-6 border-t border-gray-100 mt-8">
+                    <p>⚠️ 本分析基于可穿戴设备传感器数据，无法完全替代中医师三指诊脉。建议结合问诊。</p>
+                    <div class="mt-4">
+                        <label class="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:border-amber-500 transition text-sm text-gray-600">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                            重新上传数据
+                            <input type="file" class="hidden" accept=".csv" onchange="if(this.files.length)handleFile(this.files[0])">
+                        </label>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center text-xs text-gray-400 py-6 border-t border-gray-100">
+        岐黄脉镜 · 以现代传感器为镜，映射古法脉象
+    </footer>
+
+    <script>
+    // ========== Page Navigation ==========
+    function showPage(name) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('active'); b.classList.add('text-gray-500'); });
+        document.getElementById('page-' + name).classList.add('active');
+        const tab = document.getElementById('tab-' + name);
+        tab.classList.add('active');
+        tab.classList.remove('text-gray-500');
+    }
+
+    // ========== 28 Pulse Types Data ==========
+    const pulseTypes = [
+        { name:'迟脉', meaning:'脉来迟缓，一息不足四至', metaphor:'老牛拉车', measurable:true, confidence:95 },
+        { name:'数脉', meaning:'脉来急促，一息五至以上', metaphor:'急鼓催征', measurable:true, confidence:95 },
+        { name:'疾脉', meaning:'脉来极快，一息七八至', metaphor:'走马奔腾', measurable:true, confidence:90 },
+        { name:'促脉', meaning:'数而一止，止无定数', metaphor:'快鼓忽漏拍', measurable:true, confidence:85 },
+        { name:'结脉', meaning:'迟而一止，止无定数', metaphor:'慢步偶踉跄', measurable:true, confidence:85 },
+        { name:'代脉', meaning:'脉来一止，止有定数', metaphor:'钟摆缺格', measurable:true, confidence:85 },
+        { name:'弦脉', meaning:'端直以长，如按琴弦', metaphor:'吉他弦', measurable:true, confidence:65 },
+        { name:'缓脉', meaning:'一息四至，从容不迫', metaphor:'散步悠然', measurable:true, confidence:60 },
+        { name:'洪脉', meaning:'脉体宽大，来盛去衰', metaphor:'波涛拍岸', measurable:true, confidence:55 },
+        { name:'细脉', meaning:'脉细如线，应指分明', metaphor:'蚕丝一缕', measurable:true, confidence:55 },
+        { name:'滑脉', meaning:'往来流利，如盘走珠', metaphor:'玉珠滚盘', measurable:true, confidence:50 },
+        { name:'涩脉', meaning:'往来艰涩，如刀刮竹', metaphor:'锉刀挫铁', measurable:'partial', confidence:45 },
+        { name:'紧脉', meaning:'绷紧有力，如转绳索', metaphor:'拧麻绳', measurable:'partial', confidence:40 },
+        { name:'弱脉', meaning:'沉细无力，按之欲绝', metaphor:'棉絮飘空', measurable:'partial', confidence:40 },
+        { name:'微脉', meaning:'极细极软，似有似无', metaphor:'蛛丝将断', measurable:'partial', confidence:30 },
+        { name:'浮脉', meaning:'轻取即得，重按稍减', metaphor:'水面浮木', measurable:false },
+        { name:'沉脉', meaning:'重按始得，轻取不应', metaphor:'水底沉石', measurable:false },
+        { name:'伏脉', meaning:'推筋着骨方得', metaphor:'深藏不露', measurable:false },
+        { name:'牢脉', meaning:'沉弦实大长', metaphor:'铁索横江', measurable:false },
+        { name:'濡脉', meaning:'浮细而软，如絮浮水', metaphor:'棉絮浮水', measurable:false },
+        { name:'革脉', meaning:'外坚中空，如按鼓皮', metaphor:'紧绷鼓面', measurable:false },
+        { name:'芤脉', meaning:'浮大中空，如按葱管', metaphor:'空心葱管', measurable:false },
+        { name:'散脉', meaning:'浮大无根，散漫不收', metaphor:'杨花飘散', measurable:false },
+        { name:'长脉', meaning:'超过寸关尺本位', metaphor:'长虹贯日', measurable:false },
+        { name:'短脉', meaning:'不及本位，应指而回', metaphor:'蜻蜓点水', measurable:false },
+        { name:'动脉', meaning:'关部突跳，如豆动摇', metaphor:'黄豆弹跳', measurable:false },
+        { name:'实脉', meaning:'三部举按皆有力', metaphor:'满弓之弦', measurable:false },
+        { name:'虚脉', meaning:'三部举按无力', metaphor:'空气球', measurable:false },
+    ];
+
+    // Render pulse table
+    const tbody = document.getElementById('pulse-table');
+    tbody.innerHTML = pulseTypes.map(p => {
+        let badge = '';
+        if (p.measurable === true) badge = `<span class="inline-block px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">✓ ${p.confidence}%</span>`;
+        else if (p.measurable === 'partial') badge = `<span class="inline-block px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded text-xs">△ 低置信</span>`;
+        else badge = `<span class="inline-block px-2 py-0.5 bg-gray-100 text-gray-500 rounded text-xs">✗ 不可测</span>`;
+        return `<tr class="border-b border-gray-50 hover:bg-gray-50">
+            <td class="py-2.5 px-4 font-medium">${p.name}</td>
+            <td class="py-2.5 px-4 text-gray-600 hidden md:table-cell">${p.meaning}</td>
+            <td class="py-2.5 px-4 text-gray-500">${p.metaphor}</td>
+            <td class="py-2.5 px-4">${badge}</td>
+        </tr>`;
+    }).join('');
+
+    // ========== File Upload ==========
+    const fileInput = document.getElementById('file-input');
+    fileInput.addEventListener('change', e => { if(e.target.files.length) handleFile(e.target.files[0]); });
+
+    function handleFile(file) {
+        document.getElementById('upload-status').classList.remove('hidden');
+        document.getElementById('upload-error').classList.add('hidden');
+        document.getElementById('status-text').textContent = `正在解析 ${file.name}...`;
+
+        if (file.name.endsWith('.zip')) {
+            handleZipFile(file);
+        } else if (file.name.endsWith('.csv')) {
+            handleCsvFile(file);
+        } else {
+            showError('不支持的文件格式，请上传 .zip 或 .csv 文件');
+        }
+    }
+
+    async function handleZipFile(file) {
+        try {
+            document.getElementById('status-text').textContent = '正在读取 ZIP 文件...';
+
+            // 使用 fflate 进行快速解压
+            const arrayBuffer = await file.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+
+            document.getElementById('status-text').textContent = '正在解压...';
+
+            // 异步解压（不阻塞UI）
+            fflate.unzip(uint8Array, (err, unzipped) => {
+                if (err) {
+                    showError('解压失败: ' + err.message);
+                    return;
+                }
+
+                // 查找 electrocardiograms/*.csv 文件
+                let foundCsv = null;
+                let foundFilename = '';
+
+                for (const [path, data] of Object.entries(unzipped)) {
+                    if (path.includes('electrocardiograms/') && path.endsWith('.csv')) {
+                        foundCsv = data;
+                        foundFilename = path.split('/').pop();
+                        break;
+                    }
+                }
+
+                if (!foundCsv) {
+                    showError('未在 ZIP 文件中找到 electrocardiograms/*.csv 文件');
+                    return;
+                }
+
+                document.getElementById('status-text').textContent = `正在分析 ${foundFilename}...`;
+
+                try {
+                    // 将 Uint8Array 转换为文本
+                    const decoder = new TextDecoder('utf-8');
+                    const content = decoder.decode(foundCsv);
+
+                    const result = parseECGCSV(content);
+
+                    document.getElementById('upload-status').classList.add('hidden');
+                    renderAnalysis(result);
+                    showPage('analysis');
+                } catch(parseErr) {
+                    showError('解析 CSV 失败: ' + parseErr.message);
+                }
+            });
+        } catch(err) {
+            showError('处理 ZIP 文件失败: ' + err.message);
+        }
+    }
+
+    function handleCsvFile(file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const result = parseECGCSV(e.target.result);
+                renderAnalysis(result);
+                showPage('analysis');
+            } catch(err) {
+                showError('解析 CSV 文件失败: ' + err.message);
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function showError(message) {
+        document.getElementById('upload-status').classList.add('hidden');
+        document.getElementById('upload-error').classList.remove('hidden');
+        document.getElementById('error-text').textContent = message;
+    }
+
+    // ========== Local ECG CSV Parser ==========
+    function parseECGCSV(text) {
+        const lines = text.split('\n');
+        let dataStart = 0;
+        for (let i = 0; i < Math.min(lines.length, 20); i++) {
+            const line = lines[i].trim();
+            if (line && /^-?\d/.test(line)) { dataStart = i; break; }
+            dataStart = i + 1;
+        }
+
+        const voltages = [];
+        for (let i = dataStart; i < lines.length; i++) {
+            const v = parseFloat(lines[i].split(',')[0]);
+            if (!isNaN(v)) voltages.push(v / 1000); // µV → mV
+        }
+
+        if (voltages.length < 2560) throw new Error('ECG数据太短（需要至少5秒 @ 512Hz）');
+
+        const fs = 512;
+        const features = extractFeatures(voltages, fs);
+        const candidates = classifyPulse(features);
+        const radar = computeRadar(features);
+
+        // Downsample waveform for display
+        const step = 4;
+        const waveform = [];
+        for (let i = 0; i < Math.min(voltages.length, 8000); i += step) waveform.push(voltages[i]);
+
+        return { features, candidates, radar, ecg_waveform: waveform, ecg_sample_rate: fs/step };
+    }
+
+    function extractFeatures(voltage, fs) {
+        // Simple R-peak detection (threshold-based)
+        const threshold = Math.max(...voltage) * 0.5;
+        const rpeaks = [];
+        let inPeak = false;
+        let peakMax = -Infinity, peakIdx = 0;
+        for (let i = 0; i < voltage.length; i++) {
+            if (voltage[i] > threshold) {
+                if (!inPeak) { inPeak = true; peakMax = voltage[i]; peakIdx = i; }
+                else if (voltage[i] > peakMax) { peakMax = voltage[i]; peakIdx = i; }
+            } else if (inPeak) {
+                rpeaks.push(peakIdx);
+                inPeak = false; peakMax = -Infinity;
+            }
+        }
+
+        if (rpeaks.length < 4) throw new Error('检测到的心搏数不足（信号质量可能较差）');
+
+        const rrMs = [];
+        for (let i = 1; i < rpeaks.length; i++) rrMs.push((rpeaks[i] - rpeaks[i-1]) / fs * 1000);
+
+        const meanRR = rrMs.reduce((a,b)=>a+b,0) / rrMs.length;
+        const meanHR = 60000 / meanRR;
+        const sdnn = Math.sqrt(rrMs.map(r=>(r-meanRR)**2).reduce((a,b)=>a+b,0) / rrMs.length);
+
+        const rrDiff = [];
+        for (let i = 1; i < rrMs.length; i++) rrDiff.push(rrMs[i] - rrMs[i-1]);
+        const rmssd = Math.sqrt(rrDiff.map(d=>d*d).reduce((a,b)=>a+b,0) / rrDiff.length);
+
+        const rrCV = sdnn / meanRR;
+        const rAmps = rpeaks.map(i => voltage[i]);
+        const meanRAmp = rAmps.reduce((a,b)=>a+b,0) / rAmps.length;
+        const premature = rrMs.filter(r => r < meanRR * 0.8).length;
+
+        return {
+            mean_hr_bpm: Math.round(meanHR*10)/10,
+            min_hr_bpm: Math.round(60000/Math.max(...rrMs)*10)/10,
+            max_hr_bpm: Math.round(60000/Math.min(...rrMs)*10)/10,
+            sdnn_ms: Math.round(sdnn*10)/10,
+            rmssd_ms: Math.round(rmssd*10)/10,
+            rr_cv: Math.round(rrCV*10000)/10000,
+            mean_r_amplitude_mv: Math.round(meanRAmp*1000)/1000,
+            premature_beat_count: premature,
+            pause_count: rrMs.filter(r => r > meanRR * 1.5).length,
+            has_regular_pauses: false,
+            total_beats: rpeaks.length,
+            lf_hf_ratio: null,
+            poincare_sd1_ms: Math.round(Math.sqrt(rrDiff.map(d=>d*d).reduce((a,b)=>a+b,0)/rrDiff.length/2)*10)/10,
+            duration_sec: Math.round(voltage.length / fs * 10)/10,
+            n_beats: rpeaks.length,
+        };
+    }
+
+    function classifyPulse(f) {
+        const candidates = [];
+        const hr = f.mean_hr_bpm;
+        if (hr < 60) candidates.push({type_cn:'迟脉',type_en:'Slow',category:'rate',confidence:0.95,evidence:`心率 ${hr} bpm < 60`,clinical_meaning:'寒证、阳虚 — 阳气不足，不能鼓动血脉'});
+        if (hr > 90) candidates.push({type_cn:'数脉',type_en:'Rapid',category:'rate',confidence:hr>100?0.95:0.85,evidence:`心率 ${hr} bpm > 90`,clinical_meaning:'热证、阴虚 — 邪热亢盛或阴虚内热'});
+        if (hr > 120) candidates.push({type_cn:'疾脉',type_en:'Racing',category:'rate',confidence:0.90,evidence:`心率 ${hr} bpm > 120`,clinical_meaning:'阳亢极、阴竭阳脱'});
+
+        const pr = f.premature_beat_count / f.total_beats;
+        if (pr > 0.1 && hr > 90) candidates.push({type_cn:'促脉',type_en:'Skipping-rapid',category:'rhythm',confidence:0.85,evidence:`快心率 + ${f.premature_beat_count}次早搏`,clinical_meaning:'阳盛实热，气滞血瘀'});
+        if (pr > 0.1 && hr < 65) candidates.push({type_cn:'结脉',type_en:'Knotted',category:'rhythm',confidence:0.85,evidence:`慢心率 + 不规则停搏`,clinical_meaning:'阴盛气结，寒痰血瘀'});
+
+        if (f.rmssd_ms < 20) candidates.push({type_cn:'弦脉',type_en:'Wiry',category:'tension',confidence:0.65,evidence:`RMSSD=${f.rmssd_ms}ms (低副交感)`,clinical_meaning:'肝胆病、痛证、痰饮 — 肝气郁结'});
+        if (f.rmssd_ms > 50 && hr >= 55 && hr <= 78) candidates.push({type_cn:'缓脉',type_en:'Moderate',category:'tension',confidence:0.60,evidence:`RMSSD=${f.rmssd_ms}ms + 心率从容`,clinical_meaning:'正常脉或脾胃虚弱'});
+
+        if (f.mean_r_amplitude_mv > 1.5) candidates.push({type_cn:'洪脉',type_en:'Flooding',category:'amplitude',confidence:0.55,evidence:`R波振幅 ${f.mean_r_amplitude_mv}mV (高)`,clinical_meaning:'气分热盛'});
+        if (f.mean_r_amplitude_mv < 0.5) candidates.push({type_cn:'细脉',type_en:'Thready',category:'amplitude',confidence:0.55,evidence:`R波振幅 ${f.mean_r_amplitude_mv}mV (低)`,clinical_meaning:'气血两虚'});
+
+        if (f.rr_cv < 0.03 && f.premature_beat_count === 0) candidates.push({type_cn:'滑脉',type_en:'Slippery',category:'smoothness',confidence:0.50,evidence:`RR变异系数 ${f.rr_cv} (极规整)`,clinical_meaning:'痰湿、食积、妊娠'});
+        if (f.rr_cv > 0.10) candidates.push({type_cn:'涩脉',type_en:'Choppy',category:'smoothness',confidence:0.45,evidence:`RR变异系数 ${f.rr_cv} (不规整)`,clinical_meaning:'气滞血瘀'});
+
+        candidates.sort((a,b) => b.confidence - a.confidence);
+        return candidates;
+    }
+
+    function computeRadar(f) {
+        const rateScore = f.mean_hr_bpm < 60 ? Math.min(1,(60-f.mean_hr_bpm)/30) : f.mean_hr_bpm > 90 ? Math.min(1,(f.mean_hr_bpm-90)/40) : 0.1;
+        const rhythmScore = Math.min(1, f.rr_cv*10 + f.premature_beat_count*0.1);
+        const ampScore = f.mean_r_amplitude_mv > 1.5 ? Math.min(1,(f.mean_r_amplitude_mv-1)/1) : f.mean_r_amplitude_mv < 0.5 ? Math.min(1,(1-f.mean_r_amplitude_mv)/1) : 0.2;
+        const tensionScore = f.rmssd_ms < 20 ? Math.min(1,(30-f.rmssd_ms)/30) : f.rmssd_ms > 50 ? Math.min(1,(f.rmssd_ms-40)/40) : 0.2;
+        const smoothScore = f.rr_cv < 0.03 ? 0.8 : f.rr_cv > 0.10 ? Math.min(1,f.rr_cv*8) : 0.3;
+        return { rate: rateScore, rhythm: rhythmScore, amplitude: ampScore, tension: tensionScore, smoothness: smoothScore };
+    }
+
+    // ========== Demo Data ==========
+    // ========== Render Analysis ==========
+    let radarChart = null, ecgChart = null;
+
+    function renderAnalysis(data) {
+        document.getElementById('no-data').classList.add('hidden');
+        document.getElementById('results').classList.remove('hidden');
+
+        const candidates = data.candidates || [];
+        if (candidates.length === 0) {
+            document.getElementById('primary-title').textContent = '平脉（正常）';
+            document.getElementById('primary-english').textContent = 'Normal Pulse';
+            document.getElementById('primary-confidence-text').textContent = '';
+            document.getElementById('primary-confidence-bar').style.width = '100%';
+            document.getElementById('primary-evidence').textContent = '未检测到明显异常脉象特征';
+            document.getElementById('primary-meaning').textContent = '不浮不沉，不快不慢，从容和缓，节律整齐——有胃气之正常脉象';
+        } else {
+            const p = candidates[0];
+            document.getElementById('primary-title').textContent = `【${p.type_cn}】`;
+            document.getElementById('primary-english').textContent = `${p.type_en} · ${p.category}`;
+            document.getElementById('primary-confidence-text').textContent = Math.round(p.confidence*100)+'%';
+            document.getElementById('primary-confidence-bar').style.width = (p.confidence*100)+'%';
+            document.getElementById('primary-evidence').textContent = p.evidence;
+            document.getElementById('primary-meaning').textContent = p.clinical_meaning;
+        }
+
+        // Secondary
+        const sec = candidates.slice(1).filter(c=>c.confidence>=0.45);
+        const secSection = document.getElementById('secondary-section');
+        if (sec.length > 0) {
+            secSection.classList.remove('hidden');
+            document.getElementById('secondary-list').innerHTML = sec.slice(0,4).map(c=>`
+                <div class="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-medium">${c.type_cn} <span class="text-gray-400 text-sm">${c.type_en}</span></span>
+                        <span class="text-sm text-amber-700 font-bold">${Math.round(c.confidence*100)}%</span>
+                    </div>
+                    <p class="text-xs text-gray-500">${c.clinical_meaning}</p>
+                </div>`).join('');
+        } else { secSection.classList.add('hidden'); }
+
+        // Metrics
+        const f = data.features;
+        const metrics = [
+            {label:'心率', value:f.mean_hr_bpm?f.mean_hr_bpm+' bpm':'—', sub:f.min_hr_bpm?`范围 ${f.min_hr_bpm}-${f.max_hr_bpm}`:'' },
+            {label:'HRV SDNN', value:f.sdnn_ms?f.sdnn_ms+' ms':'—', sub:'心率变异性' },
+            {label:'HRV RMSSD', value:f.rmssd_ms?f.rmssd_ms+' ms':'—', sub:'副交感活性' },
+            {label:'R波振幅', value:f.mean_r_amplitude_mv?f.mean_r_amplitude_mv+' mV':'—', sub:'信号强度' },
+            {label:'LF/HF', value:f.lf_hf_ratio||'—', sub:'交感/副交感' },
+            {label:'RR变异系数', value:f.rr_cv?(f.rr_cv*100).toFixed(1)+'%':'—', sub:'节律规整度' },
+        ];
+        document.getElementById('metrics-list').innerHTML = metrics.map(m=>`
+            <div class="flex justify-between items-center py-2 border-b border-gray-50">
+                <div><span class="text-sm font-medium">${m.label}</span><p class="text-xs text-gray-400">${m.sub}</p></div>
+                <span class="font-bold text-sm">${m.value}</span>
+            </div>`).join('');
+
+        // Radar
+        const radar = data.radar;
+        if (radarChart) radarChart.destroy();
+        radarChart = new Chart(document.getElementById('radar-chart'), {
+            type:'radar',
+            data:{
+                labels:['频率\n(迟/数)','节律\n(促/结/代)','振幅\n(洪/细)','张力\n(弦/缓)','流畅度\n(滑/涩)'],
+                datasets:[{data:[radar.rate,radar.rhythm,radar.amplitude,radar.tension,radar.smoothness],
+                    backgroundColor:'rgba(139,37,0,0.1)',borderColor:'rgba(139,37,0,0.6)',borderWidth:2,pointBackgroundColor:'#8B2500',pointRadius:4}]
+            },
+            options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},
+                scales:{r:{beginAtZero:true,max:1,ticks:{display:false},grid:{color:'rgba(0,0,0,0.06)'},pointLabels:{font:{size:11}}}}}
+        });
+
+        // ECG waveform
+        if (data.ecg_waveform && data.ecg_waveform.length > 0) {
+            document.getElementById('ecg-section').classList.remove('hidden');
+            const sr = data.ecg_sample_rate || 128;
+            const labels = data.ecg_waveform.map((_,i)=>(i/sr).toFixed(2));
+            if (ecgChart) ecgChart.destroy();
+            ecgChart = new Chart(document.getElementById('ecg-chart'), {
+                type:'line',
+                data:{labels, datasets:[{data:data.ecg_waveform,borderColor:'#8B2500',borderWidth:1,pointRadius:0,tension:0.1,fill:false}]},
+                options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+                    scales:{x:{title:{display:true,text:'时间(秒)'},ticks:{maxTicksLimit:8}},y:{title:{display:true,text:'mV'}}},animation:false}
+            });
+        }
+    }
+    // ========== 脉象体质 (Pulse Constitution) ==========
+    function determinePulseConstitution(f) {
+        // Check for flatline / no signal
+        if (!f.mean_hr_bpm || f.mean_hr_bpm === 0 ||
+            (f.mean_r_amplitude_mv !== undefined && f.mean_r_amplitude_mv < 0.01 && f.rr_cv === 0)) {
+            return {
+                element: '—', hexagram: '☠', typeName: '无脉·归墟型',
+                portrait: '你可能……噶了。（或者传感器没贴好，建议重新录制）',
+                description: '未检测到有效脉搏信号。可能原因：传感器接触不良、手指未正确放置在表冠上、或设备故障。',
+                advice: '请确认录制时手指紧贴数码表冠并保持30秒不动。如反复无信号，建议检查设备。',
+                color: '#1a1a1a',
+                dims: { speed:'—', force:'—', tension:'—', rhythm:'—', stability:'—', coherence:'—' },
+            };
+        }
+
+        // 6 dimensions, each tri-state (阴/中/阳)
+        const dims = {};
+
+        // 1. 气速 (Rate) — 寒热虚实的基本面
+        if (f.mean_hr_bpm < 65) dims.speed = 'cold';       // 寒
+        else if (f.mean_hr_bpm > 85) dims.speed = 'hot';   // 热
+        else dims.speed = 'neutral';                        // 平
+
+        // 2. 气势 (Force/Amplitude) — 气血充盈度
+        if (f.mean_r_amplitude_mv < 0.6) dims.force = 'deficient';   // 虚
+        else if (f.mean_r_amplitude_mv > 1.3) dims.force = 'excess'; // 实
+        else dims.force = 'balanced';                                  // 和
+
+        // 3. 气张 (Tension/HRV) — 肝气疏泄状态
+        if (f.rmssd_ms < 22) dims.tension = 'tense';       // 郁（肝气郁结）
+        else if (f.rmssd_ms > 48) dims.tension = 'loose';  // 疏（肝气疏达）
+        else dims.tension = 'moderate';                     // 调
+
+        // 4. 气律 (Rhythm) — 心神安定度
+        const irregularity = f.rr_cv + (f.premature_beat_count || 0) * 0.02;
+        if (irregularity > 0.08) dims.rhythm = 'disturbed';   // 扰（心神不宁）
+        else if (irregularity < 0.03) dims.rhythm = 'steady'; // 定（心神安定）
+        else dims.rhythm = 'normal';                          // 常
+
+        // 5. 气稳 (Stability) — 振幅一致性 → 气血运行稳定性
+        const ampCV = f.mean_r_amplitude_mv > 0 ? (f.r_amplitude_std_mv || 0.1) / f.mean_r_amplitude_mv : 0.1;
+        if (ampCV > 0.15) dims.stability = 'fluctuating';  // 动（气机波动）
+        else if (ampCV < 0.06) dims.stability = 'rigid';   // 滞（气机凝滞）
+        else dims.stability = 'flowing';                    // 畅（气机通畅）
+
+        // 6. 气韵 (Recovery/Coherence) — 心率恢复一致性 → 正气强弱
+        const sd1 = f.poincare_sd1_ms || 20;
+        if (sd1 > 35) dims.coherence = 'chaotic';    // 散（正气不固）
+        else if (sd1 < 12) dims.coherence = 'tight'; // 敛（正气内收）
+        else dims.coherence = 'harmonic';             // 和（正气充沛）
+
+        // Map to 五行体质
+        const constitution = mapToConstitution(dims);
+        constitution.dims = dims;
+        return constitution;
+    }
+
+    function mapToConstitution(d) {
+        // Primary element based on dominant pattern
+        let element, hexagram, typeName, description, advice;
+
+        let portrait;
+
+        // === 热证体系 ===
+        if (d.speed === 'hot' && d.force === 'excess') {
+            element = '火'; hexagram = '离';
+            typeName = '离火·阳盛型';
+            portrait = '你可能是一个精力充沛、说话声音洪亮的人，做事风风火火，朋友聚会里你往往是最活跃的那个。你可能偏爱重口味食物，习惯晚睡，容易觉得热。';
+            description = '气血充盛，阳气亢旺。精力旺盛但易上火，性情急躁，面色红润。';
+            advice = '宜清热降火，忌辛辣煎炸。可饮菊花茶、绿豆汤。夏天尤其注意防暑降温。';
+        } else if (d.speed === 'hot' && d.force === 'deficient') {
+            element = '火'; hexagram = '兑';
+            typeName = '兑泽·阴虚型';
+            portrait = '你可能是一个体型偏瘦、容易感到口渴的人，睡眠比较浅，夜里有时会醒来。你可能习惯熬夜或长期用脑过度，手心脚心偶尔发热。';
+            description = '阴液不足，虚火内生。常感口干、手心热、夜间盗汗，体瘦面颊红。';
+            advice = '宜滋阴降火，忌熬夜。可食银耳百合、枸杞。早睡是最好的滋阴药。';
+        } else if (d.speed === 'hot' && d.tension === 'tense') {
+            element = '火'; hexagram = '震';
+            typeName = '震雷·肝火型';
+            portrait = '你可能是一个工作压力较大、追求完美的人，容易因为小事生气或焦虑。你可能有喝酒或晚睡的习惯，眼睛经常干涩发红。';
+            description = '肝气郁而化火，性急易怒。头胀目赤，口苦胁痛，睡眠不安。';
+            advice = '宜疏肝清火。可饮夏枯草茶，保持情志舒畅。减少酒精摄入，学会放下。';
+        }
+        // === 寒证体系 ===
+        else if (d.speed === 'cold' && d.force === 'deficient') {
+            element = '水'; hexagram = '坎';
+            typeName = '坎水·阳虚型';
+            portrait = '你可能是一个比较怕冷的人，冬天手脚不容易暖和，精力不如从前。你可能喜欢喝热水、吃温热的食物，不太爱运动或者运动后容易累。';
+            description = '阳气不足，温煦失职。畏寒肢冷，精神不振，面色晄白，小便清长。';
+            advice = '宜温补阳气，忌生冷。可食羊肉、桂圆、生姜。坚持适度运动激发阳气。';
+        } else if (d.speed === 'cold' && d.force === 'excess') {
+            element = '水'; hexagram = '艮';
+            typeName = '艮山·寒实型';
+            portrait = '你可能是一个体格看起来还不错，但总觉得身体沉重的人。天冷或下雨天关节可能不太舒服，你可能不太爱出汗，喜欢待在温暖的环境里。';
+            description = '寒邪凝滞，气血不通。身体沉重，关节疼痛，遇寒加重。';
+            advice = '宜散寒通络。可艾灸、热敷，饮桂枝汤类。避免久居潮湿阴冷环境。';
+        } else if (d.speed === 'cold' && d.tension === 'loose') {
+            element = '水'; hexagram = '坤';
+            typeName = '坤地·脾阳虚型';
+            portrait = '你可能是一个吃东西比较挑、胃口不太大的人，吃完饭容易犯困或腹胀。你可能偏爱甜食但吃了又不消化，大便偏软不太成形。';
+            description = '脾阳不振，运化无力。食欲不振，腹胀便溏，四肢倦怠。';
+            advice = '宜健脾温阳。可食山药、红枣、小米粥。少食寒凉水果和冷饮。';
+        }
+        // === 郁证体系 ===
+        else if (d.tension === 'tense' && d.stability === 'rigid') {
+            element = '木'; hexagram = '巽';
+            typeName = '巽风·气郁型';
+            portrait = '你可能是一个心思细腻、容易想太多的人，有时候会莫名叹气。你可能有久坐办公的习惯，社交时偶尔感到疲惫，喜欢独处但又怕孤独。';
+            description = '肝气不疏，气机郁滞。胸闷善叹息，情绪抑郁，胁肋胀满。';
+            advice = '宜疏肝理气。可饮玫瑰花茶，多运动散步，听舒缓音乐。找人聊天也是良药。';
+        } else if (d.tension === 'tense' && d.rhythm === 'disturbed') {
+            element = '木'; hexagram = '震';
+            typeName = '震木·肝风型';
+            portrait = '你可能是一个情绪起伏比较大的人，高兴时特别高兴，生气时特别生气。你可能有时会感到头晕或偏头痛，尤其在压力大或睡眠不好之后。';
+            description = '肝阳偏亢，风气内动。头晕目眩，肢体震颤，情绪波动大。';
+            advice = '宜平肝息风。可饮天麻钩藤茶，避免暴怒。规律作息比什么补品都有效。';
+        } else if (d.tension === 'tense' && d.force === 'deficient') {
+            element = '木'; hexagram = '巽';
+            typeName = '巽木·血虚肝郁型';
+            portrait = '你可能是一个看起来文静、面色偏白或偏黄的人，容易感到疲倦但又睡不踏实。你可能有贫血倾向，月经量可能偏少，指甲容易断裂。';
+            description = '血虚不能柔肝，肝气失养而郁。面色萎黄，视物模糊，指甲淡白。';
+            advice = '宜养血柔肝。可食当归、阿胶、龙眼肉。保证蛋白质和铁的摄入。';
+        }
+        // === 痰湿体系 ===
+        else if (d.rhythm === 'steady' && d.force === 'excess' && d.speed !== 'hot') {
+            element = '土'; hexagram = '坤';
+            typeName = '坤土·痰湿型';
+            portrait = '你可能是一个体型偏丰满、出汗比较多的人，总觉得身上黏腻。你可能偏爱甜食、油腻食物，不太爱运动，早上起床时感觉脑子不太清爽。';
+            description = '脾失健运，痰湿内蕴。体型偏胖，痰多胸闷，身体困重，舌苔厚腻。';
+            advice = '宜健脾化湿。可饮薏仁水、陈皮茶。少食甜腻，坚持出汗运动。';
+        } else if (d.rhythm === 'steady' && d.stability === 'rigid' && d.coherence === 'tight') {
+            element = '土'; hexagram = '艮';
+            typeName = '艮土·气滞血瘀型';
+            portrait = '你可能是一个身上经常有固定位置不舒服的人，比如某处总是酸痛或刺痛。你的肤色可能偏暗，容易有黑眼圈，可能久坐少动或有吸烟习惯。';
+            description = '气滞日久，血行不畅。固定部位刺痛，面色晦暗，唇色紫暗。';
+            advice = '宜活血化瘀。可饮山楂茶、三七粉。坚持有氧运动，戒烟。';
+        }
+        // === 散乱体系 ===
+        else if (d.coherence === 'chaotic' && d.rhythm === 'disturbed') {
+            element = '火'; hexagram = '离';
+            typeName = '离散·心神不宁型';
+            portrait = '你可能是一个最近睡眠不太好、容易走神的人，有时心里突然一紧或者心跳加速。你可能近期压力较大、喝了太多咖啡，或者正在经历一些让你焦虑的事情。';
+            description = '心神浮散，神不守舍。心悸怔忡，多梦易惊，注意力难集中。';
+            advice = '宜安神定志。可食酸枣仁、莲子心茶。规律作息，减少咖啡因摄入。';
+        } else if (d.coherence === 'chaotic' && d.force === 'deficient') {
+            element = '金'; hexagram = '兑';
+            typeName = '兑金·气阴两虚型';
+            portrait = '你可能是一个说话声音不大、容易气短的人，稍微活动就出汗。你可能最近大病初愈、过度劳累、或者长期睡眠不足，总觉得提不起精神。';
+            description = '气阴俱伤，正气不固。自汗盗汗，气短懒言，口干咽燥。';
+            advice = '宜益气养阴。可食西洋参、麦冬、五味子。充分休息是第一要务。';
+        }
+        // === 和平体系 ===
+        else if (d.speed === 'neutral' && d.force === 'balanced' && d.tension === 'moderate') {
+            if (d.rhythm === 'steady' && d.coherence === 'harmonic') {
+                element = '土'; hexagram = '乾';
+                typeName = '乾元·平和型';
+                portrait = '你可能是一个作息比较规律、心态比较平和的人，不容易生病，睡眠质量不错。你可能有运动习惯，饮食也比较均衡，朋友觉得你状态一直挺好。';
+                description = '阴阳调和，气血充盈。精力充沛，睡眠良好，不易生病，性格开朗。';
+                advice = '继续保持规律作息和适度运动。顺应四时变化，饮食均衡即可。';
+            } else {
+                element = '土'; hexagram = '坤';
+                typeName = '坤顺·基本平和型';
+                portrait = '你可能是一个整体状态还不错的人，没有明显不舒服，但偶尔会在换季或加班后感到小疲惫。你的生活习惯大致健康，但可能还有优化空间。';
+                description = '气血尚调，略有偏颇。整体健康，但可能在换季或疲劳时出现小问题。';
+                advice = '注意劳逸结合，避免过度疲劳。饮食清淡为主，适当运动。';
+            }
+        }
+        // === 过渡/混合型 ===
+        else if (d.speed === 'neutral' && d.tension === 'tense') {
+            element = '木'; hexagram = '巽';
+            typeName = '巽风·轻度气郁型';
+            portrait = '你可能是一个日常还过得去，但最近有点"闷"的人。工作或生活中有些事压在心里没说出来，偶尔会不自觉地深呼吸或叹气。';
+            description = '肝气略有不疏，但未化火。偶有胸闷叹息，情绪时有波动。';
+            advice = '宜适度运动疏肝，保持社交，避免久坐不动。找个出口表达情绪。';
+        } else if (d.speed === 'neutral' && d.tension === 'loose' && d.force === 'deficient') {
+            element = '土'; hexagram = '坤';
+            typeName = '坤土·脾气虚型';
+            portrait = '你可能是一个容易觉得累、饭后爱犯困的人。你的食欲可能不太稳定，有时候不太想吃但到点了还是会吃。你可能不太爱运动，觉得动一动就累。';
+            description = '脾气不足，运化偏弱。食后腹胀，大便偏软，容易疲倦。';
+            advice = '宜益气健脾。三餐定时，细嚼慢咽，可食山药、党参炖汤。饭后散步。';
+        } else if (d.speed === 'neutral' && d.force === 'excess') {
+            element = '金'; hexagram = '乾';
+            typeName = '乾金·气血充实型';
+            portrait = '你可能是一个身体比较壮实、精力还不错的人，食量偏大，不太怕冷也不太怕热。你可能应酬较多或饮食偏丰盛，体重可能在缓慢上升。';
+            description = '气血旺盛，体质壮实。但需警惕痰湿或血瘀隐患。';
+            advice = '宜保持运动量，饮食不要过于肥甘。控制体重，定期体检。';
+        } else if (d.rhythm === 'disturbed' && d.speed === 'neutral') {
+            element = '火'; hexagram = '兑';
+            typeName = '兑火·心气不足型';
+            portrait = '你可能是一个偶尔会感到心慌或"心里一紧"的人，尤其在累了或者喝了咖啡之后。你可能睡前会有一阵心跳加快的感觉，但检查又没什么大问题。';
+            description = '心气偏虚，节律偶有不齐。偶感心悸，劳累后明显。';
+            advice = '宜养心安神。可食龙眼肉、大枣。避免过度劳累和情绪激动。';
+        }
+        // === 兜底 ===
+        else {
+            element = '土'; hexagram = '坤';
+            typeName = '坤土·偏颇待辨型';
+            portrait = '你的脉象特征处于多种体质的交界地带，没有非常突出的单一倾向。这可能说明你的身体状态比较复杂，或者当前数据量还不够充分判断。';
+            description = '体质特征不明显，可能处于多种体质的交界状态。';
+            advice = '建议结合问诊（症状、饮食、睡眠）进一步辨识。保持健康生活方式。';
+        }
+
+        // 五行颜色
+        const elementColors = { '木':'#2D8B4E', '火':'#C0392B', '土':'#B8860B', '金':'#7F8C8D', '水':'#2471A3' };
+
+        return { element, hexagram, typeName, portrait, description, advice, color: elementColors[element] };
+    }
+
+    // ========== Render Constitution in Analysis ==========
+    function renderConstitution(data) {
+        const f = data.features;
+        if (!f || !f.mean_hr_bpm) return;
+
+        // Fill in missing fields with defaults for constitution calc
+        const features = {
+            mean_hr_bpm: f.mean_hr_bpm || 72,
+            mean_r_amplitude_mv: f.mean_r_amplitude_mv || 1.0,
+            r_amplitude_std_mv: f.r_amplitude_std_mv || 0.1,
+            rmssd_ms: f.rmssd_ms || 30,
+            rr_cv: f.rr_cv || 0.05,
+            premature_beat_count: f.premature_beat_count || 0,
+            poincare_sd1_ms: f.poincare_sd1_ms || 20,
+        };
+
+        const c = determinePulseConstitution(features);
+        const section = document.getElementById('constitution-section');
+        section.classList.remove('hidden');
+
+        document.getElementById('const-type').textContent = c.typeName;
+        document.getElementById('const-type').style.color = c.color;
+        document.getElementById('const-hexagram').style.borderColor = c.color;
+        document.getElementById('const-element').textContent = c.element;
+        document.getElementById('const-element').style.color = c.color;
+        document.getElementById('const-portrait').textContent = c.portrait;
+        document.getElementById('const-desc').textContent = c.description;
+        document.getElementById('const-advice').textContent = c.advice;
+
+        // Render dimension tags
+        const dimLabels = {
+            speed: { cold:'寒', neutral:'平', hot:'热' },
+            force: { deficient:'虚', balanced:'和', excess:'实' },
+            tension: { tense:'郁', moderate:'调', loose:'疏' },
+            rhythm: { disturbed:'扰', normal:'常', steady:'定' },
+            stability: { fluctuating:'动', flowing:'畅', rigid:'滞' },
+            coherence: { chaotic:'散', harmonic:'和', tight:'敛' },
+        };
+        const dimNames = { speed:'气速', force:'气势', tension:'气张', rhythm:'气律', stability:'气稳', coherence:'气韵' };
+        const dimColors = { cold:'blue', hot:'red', neutral:'gray', deficient:'blue', excess:'red', balanced:'gray', tense:'purple', moderate:'gray', loose:'green', disturbed:'orange', normal:'gray', steady:'green', fluctuating:'orange', flowing:'gray', rigid:'purple', chaotic:'orange', harmonic:'gray', tight:'purple' };
+
+        const tagsEl = document.getElementById('const-dims');
+        tagsEl.innerHTML = Object.entries(c.dims).map(([key, val]) => {
+            const color = dimColors[val] || 'gray';
+            const colorClass = { red:'bg-red-100 text-red-700', blue:'bg-blue-100 text-blue-700', purple:'bg-purple-100 text-purple-700', orange:'bg-orange-100 text-orange-700', green:'bg-green-100 text-green-700', gray:'bg-gray-100 text-gray-600' }[color];
+            return `<span class="inline-block px-2 py-1 rounded text-xs ${colorClass}">${dimNames[key]}:${dimLabels[key][val]}</span>`;
+        }).join(' ');
+    }
+
+    // Patch renderAnalysis to include constitution
+    const _origRender = renderAnalysis;
+    renderAnalysis = function(data) {
+        _origRender(data);
+        renderConstitution(data);
+    };
+    </script>
+</body>
+</html>

@@ -231,17 +231,11 @@ python scripts/rebuild_embeddings.py
 <details>
 <summary>点击查看 Web 版界面截图</summary>
 
-**分析结果 - 体质诊断**
+**完整分析界面**
 
-展示了"缓脉"诊断，包含体质类型、身体表现和调养建议：
+左侧展示了"缓脉"诊断结果，包含体质类型、身体表现和调养建议；右侧展示五维雷达图和关键指标：
 
-![分析结果-体质诊断](docs/screenshots/web-analysis-result-1.png)
-
-**分析结果 - 五维雷达图**
-
-展示关键指标和五维脉象图（频率、节律、振幅、张力、流畅度）：
-
-![分析结果-五维图](docs/screenshots/web-analysis-result-2.png)
+![Web版分析结果](docs/screenshots/web-analysis-combined.png)
 
 > 💡 **提示**：Web 快速版提供基础的 11 种脉象识别和可视化，适合快速查看单次记录。完整的 18 维特征分析、LLM 辨证和知识库检索需要使用 Skill 完整版。
 
@@ -279,7 +273,7 @@ $ python3 analyze_ecg.py
 ============================================================
 
 【基本信息】
-  姓名: 刘恺
+  姓名: ***
   记录时间: 2026-05-09 09:24:39 +0800
   Apple 分类: 窦性心律
   症状: 无

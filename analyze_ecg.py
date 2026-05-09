@@ -253,7 +253,7 @@ def generate_report(metadata, features, pulse_types):
     print("="*60)
 
     print(f"\n【基本信息】")
-    print(f"  姓名: {metadata['name']}")
+    print(f"  姓名: {metadata['name']}")  # 保持原样，实际使用时会显示真实姓名
     print(f"  记录时间: {metadata['record_date']}")
     print(f"  Apple 分类: {metadata['classification']}")
     print(f"  症状: {metadata['symptoms']}")

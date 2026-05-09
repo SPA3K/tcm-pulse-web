@@ -226,14 +226,24 @@ python scripts/rebuild_embeddings.py
 
 ### Web 快速版
 
+在线体验页面展示了基础的脉象分析功能，以下是实际使用截图：
+
 <details>
 <summary>点击查看 Web 版界面截图</summary>
 
-**数据采集页面**
-![数据采集](docs/screenshots/web-data-collection.png)
+**分析结果 - 体质诊断**
 
-**脉象分析结果**
-![分析结果](docs/screenshots/web-analysis-result.png)
+展示了"缓脉"诊断，包含体质类型、身体表现和调养建议：
+
+![分析结果-体质诊断](docs/screenshots/web-analysis-result-1.png)
+
+**分析结果 - 五维雷达图**
+
+展示关键指标和五维脉象图（频率、节律、振幅、张力、流畅度）：
+
+![分析结果-五维图](docs/screenshots/web-analysis-result-2.png)
+
+> 💡 **提示**：Web 快速版提供基础的 11 种脉象识别和可视化，适合快速查看单次记录。完整的 18 维特征分析、LLM 辨证和知识库检索需要使用 Skill 完整版。
 
 </details>
 

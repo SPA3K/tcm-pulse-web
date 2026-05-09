@@ -424,7 +424,12 @@
 
             // 异步解压（不阻塞UI）
             fflate.unzip(uint8Array, (err, unzipped) => {
+                // 确保在回调中也能访问到DOM元素
+                const statusEl = document.getElementById('upload-status');
+                const statusText = document.getElementById('status-text');
+
                 if (err) {
+                    console.error('解压错误:', err);
                     showError('解压失败: ' + err.message);
                     return;
                 }
@@ -433,36 +438,64 @@
                 let foundCsv = null;
                 let foundFilename = '';
 
+                console.log('ZIP文件内容:', Object.keys(unzipped));
+
                 for (const [path, data] of Object.entries(unzipped)) {
                     if (path.includes('electrocardiograms/') && path.endsWith('.csv')) {
                         foundCsv = data;
                         foundFilename = path.split('/').pop();
+                        console.log('找到CSV文件:', foundFilename);
                         break;
                     }
                 }
 
                 if (!foundCsv) {
+                    console.error('未找到electrocardiograms/*.csv文件');
                     showError('未在 ZIP 文件中找到 electrocardiograms/*.csv 文件');
                     return;
                 }
 
-                document.getElementById('status-text').textContent = `正在分析 ${foundFilename}...`;
+                if (statusText) {
+                    statusText.textContent = `正在分析 ${foundFilename}...`;
+                }
 
                 try {
                     // 将 Uint8Array 转换为文本
                     const decoder = new TextDecoder('utf-8');
                     const content = decoder.decode(foundCsv);
 
+                    console.log('CSV内容长度:', content.length);
+
                     const result = parseECGCSV(content);
 
-                    document.getElementById('upload-status').classList.add('hidden');
+                    console.log('解析结果:', result);
+
+                    // 隐藏上传状态
+                    if (statusEl) {
+                        statusEl.classList.add('hidden');
+                    }
+
+                    // 清空文件输入（防止重复触发）
+                    const fileInput = document.getElementById('file-input');
+                    if (fileInput) {
+                        fileInput.value = '';
+                    }
+
+                    // 渲染结果
                     renderAnalysis(result);
-                    showPage('analysis');
+
+                    // 切换到分析页面
+                    setTimeout(() => {
+                        showPage('analysis');
+                    }, 100);
+
                 } catch(parseErr) {
+                    console.error('解析CSV错误:', parseErr);
                     showError('解析 CSV 失败: ' + parseErr.message);
                 }
             });
         } catch(err) {
+            console.error('处理ZIP文件错误:', err);
             showError('处理 ZIP 文件失败: ' + err.message);
         }
     }
@@ -471,12 +504,34 @@
         const reader = new FileReader();
         reader.onload = function(e) {
             try {
+                console.log('CSV文件加载完成');
                 const result = parseECGCSV(e.target.result);
+                console.log('CSV解析结果:', result);
+
+                // 隐藏上传状态
+                document.getElementById('upload-status').classList.add('hidden');
+
+                // 清空文件输入
+                const fileInput = document.getElementById('file-input');
+                if (fileInput) {
+                    fileInput.value = '';
+                }
+
+                // 渲染结果
                 renderAnalysis(result);
-                showPage('analysis');
+
+                // 切换到分析页面
+                setTimeout(() => {
+                    showPage('analysis');
+                }, 100);
             } catch(err) {
+                console.error('解析CSV文件错误:', err);
                 showError('解析 CSV 文件失败: ' + err.message);
             }
+        };
+        reader.onerror = function(err) {
+            console.error('读取文件错误:', err);
+            showError('读取文件失败');
         };
         reader.readAsText(file);
     }
@@ -609,8 +664,22 @@
     let radarChart = null, ecgChart = null;
 
     function renderAnalysis(data) {
-        document.getElementById('no-data').classList.add('hidden');
-        document.getElementById('results').classList.remove('hidden');
+        console.log('开始渲染分析结果:', data);
+
+        // 确保元素存在
+        const noDataEl = document.getElementById('no-data');
+        const resultsEl = document.getElementById('results');
+
+        if (!noDataEl || !resultsEl) {
+            console.error('找不到必要的DOM元素');
+            showError('页面加载错误，请刷新页面重试');
+            return;
+        }
+
+        noDataEl.classList.add('hidden');
+        resultsEl.classList.remove('hidden');
+
+        console.log('显示结果区域');
 
         const candidates = data.candidates || [];
         if (candidates.length === 0) {

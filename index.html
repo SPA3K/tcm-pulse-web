@@ -215,7 +215,7 @@
                 <button onclick="document.getElementById('file-input').click()" class="px-6 py-2 bg-amber-700 text-white rounded-lg hover:bg-red-800 transition mb-4">加载导出文件</button>
                 <input type="file" id="file-input" class="hidden" accept=".csv,.zip">
                 <p class="text-xs text-gray-500 mb-2">支持 .zip 或 .csv 格式</p>
-                <p class="text-xs text-amber-600">💡 建议：解压后直接上传 electrocardiograms/*.csv 文件更快</p>
+                <p class="text-xs text-amber-600">💡 <strong>移动端建议</strong>：解压后直接上传 electrocardiograms/*.csv 文件（避免内存问题）</p>
 
                 <!-- Upload status -->
                 <div id="upload-status" class="mt-4 hidden max-w-md mx-auto">
@@ -414,37 +414,46 @@
 
     async function handleZipFile(file) {
         try {
-            document.getElementById('status-text').textContent = '正在读取 ZIP 文件...';
+            // 检查文件大小（移动端限制）
+            const maxSize = 100 * 1024 * 1024; // 100MB
+            if (file.size > maxSize) {
+                showError(`文件过大 (${(file.size/1024/1024).toFixed(1)}MB)。建议：解压后直接上传 electrocardiograms/*.csv 文件（通常<1MB）`);
+                return;
+            }
 
-            // 使用 fflate 进行快速解压
+            document.getElementById('status-text').textContent = `正在读取 ZIP 文件 (${(file.size/1024/1024).toFixed(1)}MB)...`;
+
+            // 分块读取，避免一次性占用大量内存
             const arrayBuffer = await file.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
 
             document.getElementById('status-text').textContent = '正在解压...';
 
-            // 异步解压（不阻塞UI）
-            fflate.unzip(uint8Array, (err, unzipped) => {
-                // 确保在回调中也能访问到DOM元素
-                const statusEl = document.getElementById('upload-status');
-                const statusText = document.getElementById('status-text');
+            // 使用 unzipSync 同步解压，可以更早释放内存
+            try {
+                const unzipped = fflate.unzipSync(uint8Array);
 
-                if (err) {
-                    console.error('解压错误:', err);
-                    showError('解压失败: ' + err.message);
-                    return;
-                }
+                // 立即释放原始数据内存
+                arrayBuffer = null;
+                uint8Array = null;
 
                 // 查找 electrocardiograms/*.csv 文件
                 let foundCsv = null;
                 let foundFilename = '';
 
-                console.log('ZIP文件内容:', Object.keys(unzipped));
+                console.log('ZIP文件内容:', Object.keys(unzipped).slice(0, 10), '...');
 
                 for (const [path, data] of Object.entries(unzipped)) {
                     if (path.includes('electrocardiograms/') && path.endsWith('.csv')) {
                         foundCsv = data;
                         foundFilename = path.split('/').pop();
-                        console.log('找到CSV文件:', foundFilename);
+                        console.log('找到CSV文件:', foundFilename, `大小: ${data.length} bytes`);
+                        // 找到后立即跳出，删除其他文件以释放内存
+                        for (const key in unzipped) {
+                            if (key !== path) {
+                                delete unzipped[key];
+                            }
+                        }
                         break;
                     }
                 }
@@ -455,45 +464,44 @@
                     return;
                 }
 
-                if (statusText) {
-                    statusText.textContent = `正在分析 ${foundFilename}...`;
+                document.getElementById('status-text').textContent = `正在分析 ${foundFilename}...`;
+
+                // 将 Uint8Array 转换为文本
+                const decoder = new TextDecoder('utf-8');
+                const content = decoder.decode(foundCsv);
+
+                // 释放二进制数据内存
+                foundCsv = null;
+                unzipped = null;
+
+                console.log('CSV内容长度:', content.length);
+
+                const result = parseECGCSV(content);
+
+                console.log('解析结果:', result);
+
+                // 隐藏上传状态
+                document.getElementById('upload-status').classList.add('hidden');
+
+                // 清空文件输入（防止重复触发）
+                const fileInput = document.getElementById('file-input');
+                if (fileInput) {
+                    fileInput.value = '';
                 }
 
-                try {
-                    // 将 Uint8Array 转换为文本
-                    const decoder = new TextDecoder('utf-8');
-                    const content = decoder.decode(foundCsv);
+                // 渲染结果
+                renderAnalysis(result);
 
-                    console.log('CSV内容长度:', content.length);
+                // 切换到分析页面
+                setTimeout(() => {
+                    showPage('analysis');
+                }, 100);
 
-                    const result = parseECGCSV(content);
+            } catch(unzipErr) {
+                console.error('解压错误:', unzipErr);
+                showError('解压失败: ' + unzipErr.message + '。建议：解压后直接上传 CSV 文件');
+            }
 
-                    console.log('解析结果:', result);
-
-                    // 隐藏上传状态
-                    if (statusEl) {
-                        statusEl.classList.add('hidden');
-                    }
-
-                    // 清空文件输入（防止重复触发）
-                    const fileInput = document.getElementById('file-input');
-                    if (fileInput) {
-                        fileInput.value = '';
-                    }
-
-                    // 渲染结果
-                    renderAnalysis(result);
-
-                    // 切换到分析页面
-                    setTimeout(() => {
-                        showPage('analysis');
-                    }, 100);
-
-                } catch(parseErr) {
-                    console.error('解析CSV错误:', parseErr);
-                    showError('解析 CSV 失败: ' + parseErr.message);
-                }
-            });
         } catch(err) {
             console.error('处理ZIP文件错误:', err);
             showError('处理 ZIP 文件失败: ' + err.message);

@@ -31,7 +31,7 @@
 
 ## 使用方法
 
-1. 访问 [在线演示](https://spa3k.github.io/tcm-pulse-web/)
+1. 访问 **[在线演示](https://spa3k.github.io/tcm-pulse-web/)**
 2. 从 Apple Watch 导出健康数据
 3. 上传 ZIP 文件到系统
 4. 查看脉象分析和诊断建议

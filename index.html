@@ -213,9 +213,22 @@
             <div id="no-data" class="text-center py-12">
                 <p class="text-gray-400 text-lg mb-4">暂无分析数据</p>
                 <button onclick="document.getElementById('file-input').click()" class="px-6 py-2 bg-amber-700 text-white rounded-lg hover:bg-red-800 transition mb-4">加载导出文件</button>
-                <input type="file" id="file-input" class="hidden" accept=".csv,.zip">
-                <p class="text-xs text-gray-500 mb-2">支持 .zip 或 .csv 格式</p>
+                <input type="file" id="file-input" class="hidden" accept=".csv,.zip" multiple>
+                <p class="text-xs text-gray-500 mb-2">支持 .zip 或 .csv 格式（可多选）</p>
                 <p class="text-xs text-amber-600">💡 <strong>移动端建议</strong>：解压后直接上传 electrocardiograms/*.csv 文件（避免内存问题）</p>
+                <p class="text-xs text-blue-600 mt-1">📋 可一次选择多个 CSV 文件，系统会显示记录列表供您选择</p>
+
+                <!-- iOS 解压指引 -->
+                <div class="mt-6 max-w-md mx-auto bg-blue-50 rounded-lg p-4 border border-blue-200 text-left">
+                    <p class="font-medium text-blue-900 mb-2">📱 iPhone/iPad 用户解压指南</p>
+                    <ol class="text-xs text-blue-800 space-y-1 list-decimal list-inside">
+                        <li>在"文件" App 中找到 <code class="bg-blue-100 px-1 rounded">导出.zip</code></li>
+                        <li>长按文件，选择"解压缩"</li>
+                        <li>进入解压后的文件夹 → <code class="bg-blue-100 px-1 rounded">electrocardiograms</code></li>
+                        <li>选择所有 <code class="bg-blue-100 px-1 rounded">.csv</code> 文件（或选择一个最新的）</li>
+                        <li>点击"共享"，选择"Safari"，在本页面上传</li>
+                    </ol>
+                </div>
 
                 <!-- Upload status -->
                 <div id="upload-status" class="mt-4 hidden max-w-md mx-auto">
@@ -226,6 +239,12 @@
                 </div>
                 <div id="upload-error" class="mt-4 hidden max-w-md mx-auto">
                     <div class="p-4 bg-red-50 rounded-lg border border-red-200 text-red-700"><span id="error-text"></span></div>
+                </div>
+
+                <!-- Record list (when multiple files loaded) -->
+                <div id="record-list" class="mt-8 hidden max-w-2xl mx-auto">
+                    <h3 class="text-lg font-bold tcm-title mb-4">请选择要查看的心电图记录</h3>
+                    <div id="record-items" class="space-y-2"></div>
                 </div>
 
                 <div class="text-left max-w-2xl mx-auto mt-8 border-t border-gray-100 pt-8">
@@ -396,20 +415,119 @@
 
     // ========== File Upload ==========
     const fileInput = document.getElementById('file-input');
-    fileInput.addEventListener('change', e => { if(e.target.files.length) handleFile(e.target.files[0]); });
+    let allRecords = []; // 存储所有上传的记录
 
-    function handleFile(file) {
+    fileInput.addEventListener('change', e => {
+        if(e.target.files.length) {
+            handleFiles(Array.from(e.target.files));
+        }
+    });
+
+    function handleFiles(files) {
         document.getElementById('upload-status').classList.remove('hidden');
         document.getElementById('upload-error').classList.add('hidden');
-        document.getElementById('status-text').textContent = `正在解析 ${file.name}...`;
+        document.getElementById('record-list').classList.add('hidden');
 
-        if (file.name.endsWith('.zip')) {
-            handleZipFile(file);
-        } else if (file.name.endsWith('.csv')) {
-            handleCsvFile(file);
+        const csvFiles = files.filter(f => f.name.endsWith('.csv'));
+        const zipFiles = files.filter(f => f.name.endsWith('.zip'));
+
+        if (csvFiles.length > 0) {
+            // 多个 CSV 文件
+            if (csvFiles.length === 1) {
+                document.getElementById('status-text').textContent = `正在解析 ${csvFiles[0].name}...`;
+                handleCsvFile(csvFiles[0]);
+            } else {
+                document.getElementById('status-text').textContent = `正在加载 ${csvFiles.length} 个心电图记录...`;
+                handleMultipleCsvFiles(csvFiles);
+            }
+        } else if (zipFiles.length > 0) {
+            document.getElementById('status-text').textContent = `正在解析 ${zipFiles[0].name}...`;
+            handleZipFile(zipFiles[0]);
         } else {
             showError('不支持的文件格式，请上传 .zip 或 .csv 文件');
         }
+    }
+
+    async function handleMultipleCsvFiles(files) {
+        allRecords = [];
+        let completed = 0;
+
+        for (const file of files) {
+            try {
+                const text = await file.text();
+                const result = parseECGCSV(text);
+                allRecords.push({
+                    filename: file.name,
+                    date: extractDateFromFilename(file.name),
+                    data: result
+                });
+                completed++;
+                document.getElementById('status-text').textContent =
+                    `已加载 ${completed}/${files.length} 个记录...`;
+            } catch(err) {
+                console.error(`解析 ${file.name} 失败:`, err);
+            }
+        }
+
+        document.getElementById('upload-status').classList.add('hidden');
+
+        if (allRecords.length === 0) {
+            showError('没有成功加载任何记录');
+            return;
+        }
+
+        // 按日期排序（最新的在前）
+        allRecords.sort((a, b) => b.date.localeCompare(a.date));
+
+        // 显示记录列表
+        showRecordList();
+    }
+
+    function extractDateFromFilename(filename) {
+        // 从文件名提取日期，如 ecg_2024-10-08.csv
+        const match = filename.match(/(\d{4}-\d{2}-\d{2})/);
+        return match ? match[1] : filename;
+    }
+
+    function showRecordList() {
+        const listEl = document.getElementById('record-list');
+        const itemsEl = document.getElementById('record-items');
+
+        itemsEl.innerHTML = allRecords.map((record, idx) => {
+            const isLatest = idx === 0;
+            return `
+                <button onclick="selectRecord(${idx})"
+                    class="w-full text-left p-4 bg-white rounded-lg border-2 hover:border-amber-500 transition ${isLatest ? 'border-amber-500' : 'border-gray-200'}">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="font-medium text-gray-900">${record.date}</p>
+                            <p class="text-sm text-gray-500">${record.filename}</p>
+                        </div>
+                        ${isLatest ? '<span class="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded">最新</span>' : ''}
+                    </div>
+                </button>
+            `;
+        }).join('');
+
+        listEl.classList.remove('hidden');
+    }
+
+    function selectRecord(index) {
+        const record = allRecords[index];
+        console.log('选择记录:', record.date);
+
+        // 清空文件输入
+        const fileInput = document.getElementById('file-input');
+        if (fileInput) {
+            fileInput.value = '';
+        }
+
+        renderAnalysis(record.data);
+        showPage('analysis');
+    }
+
+    function handleFile(file) {
+        handleFiles([file]);
     }
 
     async function handleZipFile(file) {
@@ -437,65 +555,77 @@
                 arrayBuffer = null;
                 uint8Array = null;
 
-                // 查找 electrocardiograms/*.csv 文件
-                let foundCsv = null;
-                let foundFilename = '';
-
+                // 查找所有 electrocardiograms/*.csv 文件
+                const csvFiles = [];
                 console.log('ZIP文件内容:', Object.keys(unzipped).slice(0, 10), '...');
 
                 for (const [path, data] of Object.entries(unzipped)) {
                     if (path.includes('electrocardiograms/') && path.endsWith('.csv')) {
-                        foundCsv = data;
-                        foundFilename = path.split('/').pop();
-                        console.log('找到CSV文件:', foundFilename, `大小: ${data.length} bytes`);
-                        // 找到后立即跳出，删除其他文件以释放内存
-                        for (const key in unzipped) {
-                            if (key !== path) {
-                                delete unzipped[key];
-                            }
-                        }
-                        break;
+                        const filename = path.split('/').pop();
+                        console.log('找到CSV文件:', filename, `大小: ${data.length} bytes`);
+                        csvFiles.push({ path, data, filename });
                     }
                 }
 
-                if (!foundCsv) {
+                if (csvFiles.length === 0) {
                     console.error('未找到electrocardiograms/*.csv文件');
                     showError('未在 ZIP 文件中找到 electrocardiograms/*.csv 文件');
                     return;
                 }
 
-                document.getElementById('status-text').textContent = `正在分析 ${foundFilename}...`;
+                console.log(`找到 ${csvFiles.length} 个心电图记录`);
 
-                // 将 Uint8Array 转换为文本
-                const decoder = new TextDecoder('utf-8');
-                const content = decoder.decode(foundCsv);
+                // 如果只有一个文件，直接分析
+                if (csvFiles.length === 1) {
+                    document.getElementById('status-text').textContent = `正在分析 ${csvFiles[0].filename}...`;
 
-                // 释放二进制数据内存
-                foundCsv = null;
-                unzipped = null;
+                    const decoder = new TextDecoder('utf-8');
+                    const content = decoder.decode(csvFiles[0].data);
+                    const result = parseECGCSV(content);
 
-                console.log('CSV内容长度:', content.length);
+                    document.getElementById('upload-status').classList.add('hidden');
+                    const fileInput = document.getElementById('file-input');
+                    if (fileInput) fileInput.value = '';
 
-                const result = parseECGCSV(content);
+                    renderAnalysis(result);
+                    setTimeout(() => showPage('analysis'), 100);
+                } else {
+                    // 多个文件，显示列表
+                    document.getElementById('status-text').textContent = `正在加载 ${csvFiles.length} 个心电图记录...`;
 
-                console.log('解析结果:', result);
+                    allRecords = [];
+                    const decoder = new TextDecoder('utf-8');
 
-                // 隐藏上传状态
-                document.getElementById('upload-status').classList.add('hidden');
+                    for (const csvFile of csvFiles) {
+                        try {
+                            const content = decoder.decode(csvFile.data);
+                            const result = parseECGCSV(content);
+                            allRecords.push({
+                                filename: csvFile.filename,
+                                date: extractDateFromFilename(csvFile.filename),
+                                data: result
+                            });
+                        } catch(err) {
+                            console.error(`解析 ${csvFile.filename} 失败:`, err);
+                        }
+                    }
 
-                // 清空文件输入（防止重复触发）
-                const fileInput = document.getElementById('file-input');
-                if (fileInput) {
-                    fileInput.value = '';
+                    // 释放内存
+                    unzipped = null;
+
+                    document.getElementById('upload-status').classList.add('hidden');
+
+                    if (allRecords.length === 0) {
+                        showError('没有成功加载任何记录');
+                        return;
+                    }
+
+                    // 按日期排序（最新的在前）
+                    allRecords.sort((a, b) => b.date.localeCompare(a.date));
+
+                    // 显示记录列表
+                    showRecordList();
                 }
-
-                // 渲染结果
-                renderAnalysis(result);
-
-                // 切换到分析页面
-                setTimeout(() => {
-                    showPage('analysis');
-                }, 100);
 
             } catch(unzipErr) {
                 console.error('解压错误:', unzipErr);

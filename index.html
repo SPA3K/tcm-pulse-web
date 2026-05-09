@@ -97,7 +97,39 @@
 
             <!-- Step by step -->
             <div class="space-y-4 mb-8">
-                <h3 class="font-bold text-lg">操作流程</h3>
+                <h3 class="font-bold text-lg">完整操作流程</h3>
+
+                <!-- Step 0: Enable ECG feature -->
+                <div class="step-card bg-gradient-to-r from-red-50 to-white rounded-r-xl p-5 pl-6 border-l-4 border-red-500">
+                    <div class="flex items-start gap-3">
+                        <span class="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 text-red-800 flex items-center justify-center font-bold">0</span>
+                        <div class="flex-1">
+                            <p class="font-medium text-lg">开启房颤提示功能（首次使用）</p>
+                            <div class="mt-2 space-y-3">
+                                <div class="bg-white rounded-lg p-3 border border-red-100">
+                                    <p class="font-medium text-gray-900 mb-2">📱 iPhone 设置</p>
+                                    <div class="text-sm text-gray-600 space-y-1">
+                                        <p>① 打开"<strong>健康</strong>" App</p>
+                                        <p>② 点击"<strong>浏览</strong>"标签页 → "<strong>心脏</strong>"</p>
+                                        <p>③ 找到"<strong>心电图（ECG）</strong>"或"<strong>不规则心律通知</strong>"</p>
+                                        <p>④ 点击"<strong>设置</strong>"，按提示完成设定（需输入出生日期等信息）</p>
+                                        <p>⑤ 确认"<strong>不规则心律通知</strong>"开关已开启</p>
+                                    </div>
+                                </div>
+                                <div class="bg-white rounded-lg p-3 border border-red-100">
+                                    <p class="font-medium text-gray-900 mb-2">⌚ Apple Watch 设置</p>
+                                    <div class="text-sm text-gray-600 space-y-1">
+                                        <p>① 在手表上按下侧边按钮（非表冠），进入<strong>应用视图</strong></p>
+                                        <p>② 找到"<strong>心电图</strong>" App（红白心形图标 + ECG 波形）</p>
+                                        <p>③ 如果找不到，在 iPhone Watch App 中搜索"ECG"或"心电图"并安装</p>
+                                        <p>④ 首次打开会要求设置，按提示完成</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="text-xs text-red-600 mt-3">⚠️ 需要 Apple Watch Series 4 及以上，且设备地区支持 ECG 功能（中国大陆/香港/欧美等）</p>
+                        </div>
+                    </div>
+                </div>
 
                 <div class="step-card bg-white rounded-r-xl p-5 pl-6">
                     <div class="flex items-start gap-3">
@@ -115,12 +147,11 @@
                         <div>
                             <p class="font-medium text-lg">录制 ECG 心电图</p>
                             <div class="mt-2 space-y-2 text-gray-600">
-                                <p>① 在 Apple Watch 上打开 <strong>ECG App</strong>（红白心形图标）</p>
+                                <p>① 在 Apple Watch 上打开 <strong>心电图 App</strong>（红白心形图标）</p>
                                 <p>② 将<strong>另一只手的食指</strong>按住手表侧面的<strong>数码表冠</strong>（旋钮）</p>
                                 <p>③ 保持不动，等待 <strong>30 秒</strong>倒计时结束</p>
                                 <p>④ 建议连续录制 <strong>2-3 次</strong>作为对照</p>
                             </div>
-                            <p class="text-xs text-gray-400 mt-3">⚠️ 需要 Apple Watch Series 4 及以上，且所在地区已开放 ECG 功能</p>
                         </div>
                     </div>
                 </div>
@@ -132,9 +163,10 @@
                             <p class="font-medium text-lg">从 iPhone 导出健康数据</p>
                             <div class="mt-2 space-y-2 text-gray-600">
                                 <p>① 打开 iPhone 上的 <strong>健康</strong> App</p>
-                                <p>② 点击右上角 <strong>个人头像</strong></p>
+                                <p>② 点击右上角 <strong>个人头像</strong>（或"摘要"标签页右上角）</p>
                                 <p>③ 滚动到底部，点击 <strong>"导出所有健康数据"</strong></p>
-                                <p>④ 等待生成（可能需要几分钟）→ 选择保存/分享方式</p>
+                                <p>④ 等待生成（可能需要几分钟）→ 点击"<strong>导出</strong>"</p>
+                                <p>⑤ 选择"<strong>存储到文件</strong>"，保存到 iCloud 或本地</p>
                             </div>
                         </div>
                     </div>
@@ -144,11 +176,30 @@
                     <div class="flex items-start gap-3">
                         <span class="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-bold">4</span>
                         <div>
-                            <p class="font-medium text-lg">上传分析</p>
+                            <p class="font-medium text-lg">解压并提取心电图文件</p>
                             <div class="mt-2 space-y-2 text-gray-600">
-                                <p>在<strong>脉象分析</strong>页面点击<strong>"加载导出文件"</strong>按钮</p>
-                                <p>选择 zip 压缩包或解压后的 .csv 文件即可开始分析</p>
+                                <p>① 打开"<strong>文件</strong>" App，找到刚保存的 <code class="text-xs bg-gray-100 px-1 rounded">导出.zip</code></p>
+                                <p>② <strong>长按</strong>该文件，在弹出菜单中选择"<strong>解压缩</strong>"</p>
+                                <p>③ 等待解压完成，会生成一个"<strong>导出</strong>"文件夹</p>
+                                <p>④ 进入文件夹 → 找到 <code class="text-xs bg-gray-100 px-1 rounded">apple_health_export</code> → <code class="text-xs bg-gray-100 px-1 rounded">electrocardiograms</code></p>
+                                <p>⑤ 这里包含所有心电图记录（.csv 文件），每个文件对应一次测量</p>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="step-card bg-white rounded-r-xl p-5 pl-6">
+                    <div class="flex items-start gap-3">
+                        <span class="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-bold">5</span>
+                        <div>
+                            <p class="font-medium text-lg">上传到本系统分析</p>
+                            <div class="mt-2 space-y-2 text-gray-600">
+                                <p>① 切换到"<strong>脉象分析</strong>"标签页</p>
+                                <p>② 点击"<strong>加载导出文件</strong>"按钮</p>
+                                <p>③ 选择 electrocardiograms 文件夹中的所有 .csv 文件（或只选最新的）</p>
+                                <p>④ 系统会显示记录列表，选择要查看的记录即可</p>
+                            </div>
+                            <p class="text-xs text-blue-600 mt-2">💡 提示：可以一次上传多个 CSV 文件，系统会按日期排序供您选择</p>
                         </div>
                     </div>
                 </div>

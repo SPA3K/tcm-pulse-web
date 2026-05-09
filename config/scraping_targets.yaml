@@ -1,0 +1,36 @@
+# TCM Pulse Diagnosis Video Sources
+# Used by: python -m src.knowledge_base.video_scraper --config config/scraping_targets.yaml
+
+searches:
+  - query: "中医脉诊教学"
+    platform: bilibili
+    max: 20
+
+  - query: "把脉入门教程"
+    platform: bilibili
+    max: 15
+
+  - query: "二十八脉详解"
+    platform: bilibili
+    max: 10
+
+  - query: "濒湖脉学讲解"
+    platform: bilibili
+    max: 10
+
+  - query: "脉象 指下感觉"
+    platform: bilibili
+    max: 10
+
+  - query: "中医诊断学 脉诊"
+    platform: bilibili
+    max: 10
+
+  - query: "TCM pulse diagnosis tutorial"
+    platform: youtube
+    max: 10
+
+# Add specific high-quality video URLs here as you find them
+urls: []
+  # - url: "https://www.bilibili.com/video/BVxxxxxxxxxx"
+  # - url: "https://www.youtube.com/watch?v=xxxxxxxxxx"

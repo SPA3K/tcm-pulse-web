@@ -5,19 +5,63 @@
 Thumbs.db
 desktop.ini
 
-# Personal health data
+# Personal health data (don't commit real ECG files)
 *.zip
 electrocardiograms/
 *.csv
 *.xml
-export_cda.xml
-导出.xml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+env/
+ENV/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*.sublime-project
+*.sublime-workspace
 
 # Logs
 *.log
+logs/
+
+# Environment variables
+.env
+.env.local
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Models and embeddings (too large)
+*.pkl
+*.h5
+*.pth
+embeddings/*.faiss
+embeddings/*.index
+
+# API keys
+config/secrets.json
+config/api_keys.json

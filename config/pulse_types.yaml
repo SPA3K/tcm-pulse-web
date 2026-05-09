@@ -1,0 +1,284 @@
+# 28 Classical TCM Pulse Types - Definitions and Classification Thresholds
+# Used by: src/classification/pulse_classifier.py
+
+pulse_types:
+  # === Rate-based (频率类) ===
+  - id: chi_mai
+    chinese: 迟脉
+    english: Slow
+    category: rate
+    apple_watch_classifiable: true
+    confidence_level: high
+    thresholds:
+      hr_bpm_max: 60
+    finger_feeling: 一息不足四至，来去极慢
+    clinical: 寒证，阳虚
+
+  - id: shu_mai
+    chinese: 数脉
+    english: Rapid
+    category: rate
+    apple_watch_classifiable: true
+    confidence_level: high
+    thresholds:
+      hr_bpm_min: 90
+    finger_feeling: 一息五至以上，来去急促
+    clinical: 热证，阴虚
+
+  - id: ji_mai
+    chinese: 疾脉
+    english: Racing
+    category: rate
+    apple_watch_classifiable: true
+    confidence_level: high
+    thresholds:
+      hr_bpm_min: 120
+    finger_feeling: 一息七八至，脉来急疾
+    clinical: 阳亢极，元气将脱
+
+  - id: huan_mai
+    chinese: 缓脉
+    english: Moderate
+    category: rate
+    apple_watch_classifiable: true
+    confidence_level: medium
+    thresholds:
+      hr_bpm_min: 60
+      hr_bpm_max: 75
+      rmssd_ms_min: 50
+    finger_feeling: 一息四至，来去怡然
+    clinical: 正常脉（有胃气），或脾胃虚弱
+
+  # === Rhythm-based (节律类) ===
+  - id: cu_mai
+    chinese: 促脉
+    english: Skipping-rapid
+    category: rhythm
+    apple_watch_classifiable: true
+    confidence_level: high
+    thresholds:
+      hr_bpm_min: 90
+      premature_ratio_min: 0.10
+    finger_feeling: 数而一止，止无定数
+    clinical: 阳盛实热，气滞血瘀
+
+  - id: jie_mai
+    chinese: 结脉
+    english: Knotted
+    category: rhythm
+    apple_watch_classifiable: true
+    confidence_level: high
+    thresholds:
+      hr_bpm_max: 65
+      premature_ratio_min: 0.10
+    finger_feeling: 迟而一止，止无定数
+    clinical: 阴盛气结，寒痰血瘀
+
+  - id: dai_mai
+    chinese: 代脉
+    english: Intermittent
+    category: rhythm
+    apple_watch_classifiable: true
+    confidence_level: high
+    thresholds:
+      has_regular_pauses: true
+    finger_feeling: 脉来一止，止有定数，良久方来
+    clinical: 脏气衰微，风证痛证
+
+  # === Tension-based (张力类) ===
+  - id: xian_mai
+    chinese: 弦脉
+    english: Wiry
+    category: tension
+    apple_watch_classifiable: true
+    confidence_level: medium
+    thresholds:
+      rmssd_ms_max: 20
+      lf_hf_min: 2.0
+    finger_feeling: 端直以长，如按琴弦
+    clinical: 肝胆病，痛证，痰饮
+
+  - id: jin_mai
+    chinese: 紧脉
+    english: Tight
+    category: tension
+    apple_watch_classifiable: partial
+    confidence_level: low
+    thresholds:
+      lf_hf_min: 3.0
+      hr_bpm_min: 80
+    finger_feeling: 绷紧有力，如转绳索
+    clinical: 寒证，痛证
+
+  # === Amplitude-based (振幅类) ===
+  - id: hong_mai
+    chinese: 洪脉
+    english: Flooding
+    category: amplitude
+    apple_watch_classifiable: true
+    confidence_level: medium
+    thresholds:
+      r_amplitude_mv_min: 1.5
+    finger_feeling: 脉体宽大，来盛去衰，如波涛汹涌
+    clinical: 气分热盛
+
+  - id: xi_mai
+    chinese: 细脉
+    english: Thready
+    category: amplitude
+    apple_watch_classifiable: true
+    confidence_level: medium
+    thresholds:
+      r_amplitude_mv_max: 0.5
+    finger_feeling: 脉细如线，但应指明显
+    clinical: 气血两虚，湿邪
+
+  - id: ruo_mai
+    chinese: 弱脉
+    english: Weak
+    category: amplitude
+    apple_watch_classifiable: true
+    confidence_level: medium
+    thresholds:
+      r_amplitude_mv_max: 0.3
+      hr_bpm_max: 65
+    finger_feeling: 极软而沉细，按之乃得
+    clinical: 阳气虚衰
+
+  # === Smoothness-based (流畅度类) ===
+  - id: hua_mai
+    chinese: 滑脉
+    english: Slippery
+    category: smoothness
+    apple_watch_classifiable: partial
+    confidence_level: medium
+    thresholds:
+      rr_cv_max: 0.03
+      premature_count_max: 0
+    finger_feeling: 往来流利，如盘走珠
+    clinical: 痰湿，食积，妊娠
+
+  - id: se_mai
+    chinese: 涩脉
+    english: Choppy
+    category: smoothness
+    apple_watch_classifiable: partial
+    confidence_level: low
+    thresholds:
+      rr_cv_min: 0.10
+    finger_feeling: 往来艰涩不畅，如轻刀刮竹
+    clinical: 气滞血瘀，精伤血少
+
+  # === Depth-based (深度类) — NOT classifiable from Apple Watch ===
+  - id: fu_mai
+    chinese: 浮脉
+    english: Floating
+    category: depth
+    apple_watch_classifiable: false
+    finger_feeling: 轻取即得，重按稍减
+    clinical: 表证，虚阳外越
+
+  - id: chen_mai
+    chinese: 沉脉
+    english: Deep
+    category: depth
+    apple_watch_classifiable: false
+    finger_feeling: 轻取不应，重按始得
+    clinical: 里证，气血不足
+
+  - id: fu2_mai
+    chinese: 伏脉
+    english: Hidden
+    category: depth
+    apple_watch_classifiable: false
+    finger_feeling: 重按推筋着骨始得
+    clinical: 厥证，邪闭
+
+  - id: lao_mai
+    chinese: 牢脉
+    english: Firm
+    category: depth
+    apple_watch_classifiable: false
+    finger_feeling: 沉按实大弦长
+    clinical: 阴寒内积，疝气
+
+  # === Width/Shape-based (形态类) — NOT classifiable ===
+  - id: chang_mai
+    chinese: 长脉
+    english: Long
+    category: shape
+    apple_watch_classifiable: false
+    finger_feeling: 首尾端直，超过本位
+    clinical: 肝阳余事，阳盛热实
+
+  - id: duan_mai
+    chinese: 短脉
+    english: Short
+    category: shape
+    apple_watch_classifiable: false
+    finger_feeling: 不及本位，应指而回
+    clinical: 气虚，气郁
+
+  - id: san_mai
+    chinese: 散脉
+    english: Scattered
+    category: shape
+    apple_watch_classifiable: false
+    finger_feeling: 浮大无根，散漫不收
+    clinical: 元气耗散
+
+  - id: ru_mai
+    chinese: 濡脉
+    english: Soggy
+    category: shape
+    apple_watch_classifiable: false
+    finger_feeling: 浮而细软，如絮浮水
+    clinical: 虚证，湿邪
+
+  - id: ge_mai
+    chinese: 革脉
+    english: Leather
+    category: shape
+    apple_watch_classifiable: false
+    finger_feeling: 浮而搏指，中空外坚，如按鼓皮
+    clinical: 精血亏虚
+
+  - id: kou_mai
+    chinese: 芤脉
+    english: Hollow
+    category: shape
+    apple_watch_classifiable: false
+    finger_feeling: 浮大中空，如按葱管
+    clinical: 失血，伤阴
+
+  - id: dong_mai
+    chinese: 动脉
+    english: Moving
+    category: shape
+    apple_watch_classifiable: false
+    finger_feeling: 关部突跳，短滑有力，如豆动摇
+    clinical: 痛证，惊恐
+
+  - id: wei_mai
+    chinese: 微脉
+    english: Faint
+    category: amplitude
+    apple_watch_classifiable: false
+    finger_feeling: 极细极软，似有似无
+    clinical: 气血大虚，阳气衰微
+
+  - id: shi_mai
+    chinese: 实脉
+    english: Replete
+    category: amplitude
+    apple_watch_classifiable: false
+    finger_feeling: 三部举按皆有力
+    clinical: 实证，热证
+
+  - id: xu_mai
+    chinese: 虚脉
+    english: Vacuous
+    category: amplitude
+    apple_watch_classifiable: false
+    finger_feeling: 三部举按无力
+    clinical: 虚证

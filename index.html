@@ -897,7 +897,7 @@
         if (pr > 0.1 && hr < 65) candidates.push({type_cn:'结脉',type_en:'Knotted',category:'rhythm',confidence:0.85,evidence:`慢心率 + 不规则停搏`,clinical_meaning:'阴盛气结，寒痰血瘀'});
 
         if (f.rmssd_ms < 20) candidates.push({type_cn:'弦脉',type_en:'Wiry',category:'tension',confidence:0.65,evidence:`RMSSD=${f.rmssd_ms}ms (低副交感)`,clinical_meaning:'肝胆病、痛证、痰饮 — 肝气郁结'});
-        if (f.rmssd_ms > 50 && hr >= 55 && hr <= 78) candidates.push({type_cn:'缓脉',type_en:'Moderate',category:'tension',confidence:0.60,evidence:`RMSSD=${f.rmssd_ms}ms + 心率从容`,clinical_meaning:'正常脉或脾胃虚弱'});
+        // 缓脉(60%)已移除 — 属于正常范围，不宜作为病理脉象展示
 
         if (f.mean_r_amplitude_mv > 1.5) candidates.push({type_cn:'洪脉',type_en:'Flooding',category:'amplitude',confidence:0.55,evidence:`R波振幅 ${f.mean_r_amplitude_mv}mV (高)`,clinical_meaning:'气分热盛'});
         if (f.mean_r_amplitude_mv < 0.5) candidates.push({type_cn:'细脉',type_en:'Thready',category:'amplitude',confidence:0.55,evidence:`R波振幅 ${f.mean_r_amplitude_mv}mV (低)`,clinical_meaning:'气血两虚'});
@@ -1189,12 +1189,6 @@
 
         const c = determinePulseConstitution(features);
         const section = document.getElementById('constitution-section');
-        // Check if primary pulse is 缓脉 — skip constitution display
-        const primaryPulse = data.candidates && data.candidates.length > 0 ? data.candidates[0] : null;
-        if (primaryPulse && primaryPulse.type_cn === '缓脉') {
-            section.classList.add('hidden');
-            return;
-        }
         section.classList.remove('hidden');
 
         document.getElementById('const-type').textContent = c.typeName;
@@ -1239,26 +1233,40 @@
     // Store last analysis for copy
     let _lastAnalysisData = null;
 
-    // ========== 五行健康评分 ==========
+    // ========== 五行健康评分 (Log Curve) ==========
+    // Log transform: radar 0→1 mapped to score 0→100 via ln(1+k*x)/ln(1+k)
+    // k=3 gives a curve where normal values (0.1-0.3) map to 54-81
+    function logScore(radarValue) {
+        const k = 3;
+        return Math.round(100 * (1 - Math.log(1 + radarValue * k) / Math.log(1 + k)));
+    }
+
+    // Health age: log curve, center=28, min=14, max≈70
+    // age = 14 + 56 * (1 - score/100)^1.5
+    function scoreToAge(score) {
+        const t = 1 - score / 100;
+        return Math.round(14 + 56 * Math.pow(t, 1.5));
+    }
+
     function renderHealthScore(data) {
         const radar = data.radar;
         if (!radar) return;
 
-        // Compute individual element scores (0-100, higher = healthier)
-        const woodScore = Math.round((1 - radar.rhythm) * 100);    // 木 = 肝 · 条达疏泄 = 节律
-        const fireScore = Math.round((1 - radar.rate) * 100);      // 火 = 心 · 温煦推动 = 频率
-        const earthScore = Math.round((1 - radar.tension) * 100);  // 土 = 脾 · 承载化运 = 张力
-        const metalScore = Math.round((1 - radar.amplitude) * 100); // 金 = 肺 · 宣降收敛 = 振幅
-        const waterScore = Math.round((1 - radar.smoothness) * 100); // 水 = 肾 · 滋润藏精 = 流畅度
+        // Log-curved element scores (0-100, higher = healthier)
+        const woodScore = logScore(radar.rhythm);     // 木 = 肝 · 条达疏泄 = 节律
+        const fireScore = logScore(radar.rate);        // 火 = 心 · 温煦推动 = 频率
+        const earthScore = logScore(radar.tension);    // 土 = 脾 · 承载化运 = 张力
+        const metalScore = logScore(radar.amplitude);  // 金 = 肺 · 宣降收敛 = 振幅
+        const waterScore = logScore(radar.smoothness); // 水 = 肾 · 滋润藏精 = 流畅度
         const totalScore = Math.round((woodScore + fireScore + earthScore + metalScore + waterScore) / 5);
 
-        // Health age: score 100 → 20岁, score 0 → 100岁
-        const healthAge = Math.max(20, Math.min(100, Math.round(100 - totalScore * 0.8)));
+        // Log-curved health age (center=28, min=14)
+        const healthAge = scoreToAge(totalScore);
 
         document.getElementById('total-score').textContent = healthAge + '岁';
         let level = '平和质';
-        if (totalScore < 50) level = '需调理';
-        else if (totalScore < 70) level = '偏颇质';
+        if (totalScore < 40) level = '需调理';
+        else if (totalScore < 65) level = '偏颇质';
         document.getElementById('health-level').textContent = `综合评分 ${totalScore}/100 · ${level}`;
 
         const dims = [
@@ -1286,12 +1294,14 @@
         const f = data.features;
         if (!f) return;
 
-        // Feature cards with key metrics
+        // Feature cards — key summary metrics
         const cards = [
             { label: '心率', value: (f.mean_hr_bpm||0).toFixed(0), unit: 'bpm', range: `${f.min_hr_bpm||'—'}-${f.max_hr_bpm||'—'}` },
-            { label: 'HRV', value: (f.sdnn_ms||0).toFixed(0), unit: 'ms', range: 'SDNN' },
+            { label: 'HRV SDNN', value: (f.sdnn_ms||0).toFixed(0), unit: 'ms', range: '心率变异性' },
             { label: 'R波振幅', value: (f.mean_r_amplitude_mv||0).toFixed(2), unit: 'mV', range: '信号强度' },
             { label: '心搏数', value: f.total_beats||0, unit: '次', range: `${f.duration_sec||0}秒` },
+            { label: 'HRV RMSSD', value: (f.rmssd_ms||0).toFixed(0), unit: 'ms', range: '副交感活性' },
+            { label: '早搏', value: f.premature_beat_count||0, unit: '次', range: '异位心搏' },
         ];
         document.getElementById('feature-cards').innerHTML = cards.map(c => `
             <div class="rounded-xl p-4 text-center" style="background: linear-gradient(135deg, #FDF8F0 0%, #F5EDE0 100%); border: 1px solid #E8DDD0;">
@@ -1301,14 +1311,22 @@
             </div>
         `).join('');
 
-        // Bar chart of feature deviations
+        // Comprehensive bar chart — ALL features used by the app
+        // Each value normalized to 0-100 for visual comparison
+        const clamp = (v, lo=0, hi=100) => Math.max(lo, Math.min(hi, v));
         const features = [
-            { label: '心率偏离', value: Math.min(100, Math.abs(f.mean_hr_bpm - 72) / 40 * 100), color: '#C0392B' },
-            { label: '节律变异', value: Math.min(100, (f.rr_cv || 0) * 500), color: '#2D8B4E' },
-            { label: '振幅稳定', value: Math.min(100, f.mean_r_amplitude_mv > 0 ? (1 - Math.min(1, Math.abs(f.mean_r_amplitude_mv - 1.0) / 1.0)) * 100 : 50), color: '#7F8C8D' },
-            { label: 'HRV水平', value: Math.min(100, (f.sdnn_ms || 0) / 120 * 100), color: '#2471A3' },
-            { label: '副交感', value: Math.min(100, (f.rmssd_ms || 0) / 60 * 100), color: '#B8860B' },
-            { label: 'Poincaré', value: Math.min(100, (f.poincare_sd1_ms || 0) / 40 * 100), color: '#8E44AD' },
+            { label: '平均心率', value: clamp(f.mean_hr_bpm / 1.5), color: '#C0392B', raw: (f.mean_hr_bpm||0).toFixed(0)+' bpm' },
+            { label: '心率范围', value: clamp(((f.max_hr_bpm||0) - (f.min_hr_bpm||0)) / 2), color: '#E74C3C', raw: `${f.min_hr_bpm||'—'}-${f.max_hr_bpm||'—'}` },
+            { label: 'SDNN', value: clamp((f.sdnn_ms||0) / 1.5), color: '#2471A3', raw: (f.sdnn_ms||0).toFixed(1)+' ms' },
+            { label: 'RMSSD', value: clamp((f.rmssd_ms||0) / 1.0), color: '#2E86C1', raw: (f.rmssd_ms||0).toFixed(1)+' ms' },
+            { label: 'Poincaré SD1', value: clamp((f.poincare_sd1_ms||0) / 0.6), color: '#8E44AD', raw: (f.poincare_sd1_ms||0).toFixed(1)+' ms' },
+            { label: 'R波振幅', value: clamp(f.mean_r_amplitude_mv / 0.03), color: '#7F8C8D', raw: (f.mean_r_amplitude_mv||0).toFixed(2)+' mV' },
+            { label: 'R波振幅CV', value: clamp(((f.r_amplitude_std_mv||0.1) / Math.max(0.01, f.mean_r_amplitude_mv||1)) * 200), color: '#95A5A6', raw: (((f.r_amplitude_std_mv||0.1) / Math.max(0.01, f.mean_r_amplitude_mv||1))*100).toFixed(1)+'%' },
+            { label: 'RR变异系数', value: clamp((f.rr_cv||0) * 500), color: '#2D8B4E', raw: ((f.rr_cv||0)*100).toFixed(1)+'%' },
+            { label: '早搏次数', value: clamp(f.premature_beat_count * 20), color: '#D35400', raw: (f.premature_beat_count||0)+' 次' },
+            { label: '停搏次数', value: clamp(f.pause_count * 25), color: '#A93226', raw: (f.pause_count||0)+' 次' },
+            { label: '心搏总数', value: clamp((f.total_beats||0) / 1.5), color: '#B8860B', raw: (f.total_beats||0)+' 次' },
+            { label: '记录时长', value: clamp((f.duration_sec||0) / 0.6), color: '#6C3483', raw: (f.duration_sec||0)+' 秒' },
         ];
 
         if (featureChart) featureChart.destroy();
@@ -1326,10 +1344,20 @@
             },
             options: {
                 responsive: true, maintainAspectRatio: false, animation: false,
-                plugins: { legend: { display: false } },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => {
+                                const item = features[ctx.dataIndex];
+                                return item ? `${item.label}: ${item.raw}` : '';
+                            }
+                        }
+                    }
+                },
                 scales: {
                     y: { beginAtZero: true, max: 100, ticks: { display: false }, grid: { color: 'rgba(0,0,0,0.04)' } },
-                    x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+                    x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 45 } }
                 }
             }
         });
@@ -1429,14 +1457,14 @@
         const c = d.candidates || [];
         const r = d.radar;
 
-        // Compute 五行 scores
-        const woodScore = Math.round((1 - r.rhythm) * 100);
-        const fireScore = Math.round((1 - r.rate) * 100);
-        const earthScore = Math.round((1 - r.tension) * 100);
-        const metalScore = Math.round((1 - r.amplitude) * 100);
-        const waterScore = Math.round((1 - r.smoothness) * 100);
+        // Compute 五行 scores (log-curved)
+        const woodScore = logScore(r.rhythm);
+        const fireScore = logScore(r.rate);
+        const earthScore = logScore(r.tension);
+        const metalScore = logScore(r.amplitude);
+        const waterScore = logScore(r.smoothness);
         const totalScore = Math.round((woodScore + fireScore + earthScore + metalScore + waterScore) / 5);
-        const healthAge = Math.max(20, Math.min(100, Math.round(100 - totalScore * 0.8)));
+        const healthAge = scoreToAge(totalScore);
 
         // Constitution
         const features = {

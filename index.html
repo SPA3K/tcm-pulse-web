@@ -68,17 +68,19 @@
             border-radius: 1rem;
             padding: 1.5rem;
         }
-        /* 体检报告滑条 · Medical Report Slider */
-        .report-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #f0ede8; }
-        .report-label { width: 100px; font-size: 13px; color: #555; flex-shrink: 0; }
-        .report-label span { display: block; font-size: 11px; color: #999; }
-        .report-track { flex: 1; height: 8px; background: #e8e4de; border-radius: 4px; position: relative; overflow: visible; }
-        .report-range { position: absolute; top: -1px; height: 10px; border-radius: 3px; opacity: 0.35; }
-        .report-normal { background: #27ae60; }
-        .report-warn { background: #f39c12; }
-        .report-marker { position: absolute; top: -5px; width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.3); transform: translateX(-50%); z-index: 2; }
-        .report-value { width: 90px; text-align: right; font-size: 14px; font-weight: 700; flex-shrink: 0; }
-        .report-range-text { width: 100px; font-size: 11px; color: #999; text-align: right; flex-shrink: 0; }
+        /* 单线标尺 · Single-line Ruler */
+        .ruler-item { padding: 0; }
+        .ruler-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+        .ruler-name { font-size: 14px; font-weight: 600; color: #333; }
+        .ruler-name small { font-weight: 400; color: #999; margin-left: 4px; font-size: 12px; }
+        .ruler-val { font-size: 15px; font-weight: 700; }
+        .ruler-val small { font-weight: 400; color: #999; font-size: 11px; }
+        .ruler-line { position: relative; height: 6px; background: #e8e4de; border-radius: 3px; margin: 0 8px; }
+        .ruler-zone { position: absolute; top: -2px; height: 10px; border-radius: 5px; background: #27ae60; opacity: 0.25; }
+        .ruler-dot { position: absolute; top: -5px; width: 16px; height: 16px; border-radius: 50%; border: 2.5px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.25); transform: translateX(-50%); z-index: 2; transition: left 0.5s ease; }
+        .ruler-labels { display: flex; justify-content: space-between; margin-top: 4px; padding: 0 8px; }
+        .ruler-labels span { font-size: 10px; color: #bbb; }
+        .ruler-labels .ruler-mid { position: absolute; left: 50%; transform: translateX(-50%); font-size: 10px; color: #aaa; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -428,13 +430,10 @@
                     </div>
                 </section>
 
-                <!-- Feature Analysis — 体检报告风格 -->
+                <!-- Feature Analysis — 单线标尺风格 -->
                 <section class="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-bold tcm-title">📋 特征分析报告</h3>
-                        <span class="text-xs text-gray-400">参考范围 → 实测值</span>
-                    </div>
-                    <div id="feature-report" class="space-y-3"></div>
+                    <h3 class="text-lg font-bold tcm-title mb-5">📋 特征分析报告</h3>
+                    <div id="feature-report" class="space-y-5"></div>
                 </section>
 
                 <!-- ECG Medical Style -->
@@ -829,9 +828,14 @@
     }
 
     function extractFeatures(voltage, fs) {
-        // Simple R-peak detection (threshold-based)
-        const threshold = Math.max(...voltage) * 0.5;
-        const rpeaks = [];
+        // === R-peak detection (Pan-Tompkins inspired) ===
+        // Step 1: Adaptive threshold at 65% of max (avoid T-wave/f noise)
+        const maxV = Math.max(...voltage);
+        const minV = Math.min(...voltage);
+        const threshold = minV + (maxV - minV) * 0.65;
+
+        // Step 2: Find raw peaks above threshold
+        const rawPeaks = [];
         let inPeak = false;
         let peakMax = -Infinity, peakIdx = 0;
         for (let i = 0; i < voltage.length; i++) {
@@ -839,31 +843,94 @@
                 if (!inPeak) { inPeak = true; peakMax = voltage[i]; peakIdx = i; }
                 else if (voltage[i] > peakMax) { peakMax = voltage[i]; peakIdx = i; }
             } else if (inPeak) {
-                rpeaks.push(peakIdx);
+                rawPeaks.push({ idx: peakIdx, amp: peakMax });
                 inPeak = false; peakMax = -Infinity;
+            }
+        }
+
+        // Step 3: Refractory period — minimum 250ms between R-peaks
+        // At 512Hz: 250ms = 128 samples. Prevents T-wave double-counting.
+        const refractorySamples = Math.round(fs * 0.25);
+        const rpeaks = [];
+        for (const p of rawPeaks) {
+            if (rpeaks.length === 0) {
+                rpeaks.push(p);
+            } else {
+                const lastPeak = rpeaks[rpeaks.length - 1];
+                if (p.idx - lastPeak.idx >= refractorySamples) {
+                    rpeaks.push(p);
+                } else if (p.amp > lastPeak.amp) {
+                    // Within refractory period but higher amplitude — replace
+                    rpeaks[rpeaks.length - 1] = p;
+                }
             }
         }
 
         if (rpeaks.length < 4) throw new Error('检测到的心搏数不足（信号质量可能较差）');
 
+        // Step 4: Compute RR intervals
         const rrMs = [];
-        for (let i = 1; i < rpeaks.length; i++) rrMs.push((rpeaks[i] - rpeaks[i-1]) / fs * 1000);
+        for (let i = 1; i < rpeaks.length; i++) rrMs.push((rpeaks[i].idx - rpeaks[i-1].idx) / fs * 1000);
 
         const meanRR = rrMs.reduce((a,b)=>a+b,0) / rrMs.length;
         const meanHR = 60000 / meanRR;
-        const sdnn = Math.sqrt(rrMs.map(r=>(r-meanRR)**2).reduce((a,b)=>a+b,0) / rrMs.length);
+
+        // Step 5: Sanity check — if HR outside physiological range, retry with higher threshold
+        if (meanHR > 220 || meanHR < 25) {
+            // Retry with 80% threshold
+            const retryThreshold = minV + (maxV - minV) * 0.80;
+            const retryRaw = [];
+            inPeak = false;
+            for (let i = 0; i < voltage.length; i++) {
+                if (voltage[i] > retryThreshold) {
+                    if (!inPeak) { inPeak = true; peakMax = voltage[i]; peakIdx = i; }
+                    else if (voltage[i] > peakMax) { peakMax = voltage[i]; peakIdx = i; }
+                } else if (inPeak) {
+                    retryRaw.push({ idx: peakIdx, amp: peakMax });
+                    inPeak = false; peakMax = -Infinity;
+                }
+            }
+            // Apply refractory again
+            const retryPeaks = [];
+            for (const p of retryRaw) {
+                if (retryPeaks.length === 0) { retryPeaks.push(p); }
+                else {
+                    const last = retryPeaks[retryPeaks.length - 1];
+                    if (p.idx - last.idx >= refractorySamples) retryPeaks.push(p);
+                    else if (p.amp > last.amp) retryPeaks[retryPeaks.length - 1] = p;
+                }
+            }
+            if (retryPeaks.length >= 4) {
+                // Use retry results if they give better HR
+                const retryRR = [];
+                for (let i = 1; i < retryPeaks.length; i++) retryRR.push((retryPeaks[i].idx - retryPeaks[i-1].idx) / fs * 1000);
+                const retryHR = 60000 / (retryRR.reduce((a,b)=>a+b,0) / retryRR.length);
+                if (retryHR >= 30 && retryHR <= 200) {
+                    // Replace with retry results
+                    rpeaks.length = 0;
+                    retryPeaks.forEach(p => rpeaks.push(p));
+                    rrMs.length = 0;
+                    retryRR.forEach(r => rrMs.push(r));
+                }
+            }
+        }
+
+        // Step 6: Compute all metrics from final RR intervals
+        const finalMeanRR = rrMs.reduce((a,b)=>a+b,0) / rrMs.length;
+        const finalMeanHR = 60000 / finalMeanRR;
+        const sdnn = Math.sqrt(rrMs.map(r=>(r-finalMeanRR)**2).reduce((a,b)=>a+b,0) / rrMs.length);
 
         const rrDiff = [];
         for (let i = 1; i < rrMs.length; i++) rrDiff.push(rrMs[i] - rrMs[i-1]);
         const rmssd = Math.sqrt(rrDiff.map(d=>d*d).reduce((a,b)=>a+b,0) / rrDiff.length);
 
-        const rrCV = sdnn / meanRR;
-        const rAmps = rpeaks.map(i => voltage[i]);
+        const rrCV = sdnn / finalMeanRR;
+        const rAmps = rpeaks.map(p => voltage[p.idx]);
         const meanRAmp = rAmps.reduce((a,b)=>a+b,0) / rAmps.length;
-        const premature = rrMs.filter(r => r < meanRR * 0.8).length;
+        const premature = rrMs.filter(r => r < finalMeanRR * 0.8).length;
 
         return {
-            mean_hr_bpm: Math.round(meanHR*10)/10,
+            mean_hr_bpm: Math.round(finalMeanHR*10)/10,
             min_hr_bpm: Math.round(60000/Math.max(...rrMs)*10)/10,
             max_hr_bpm: Math.round(60000/Math.min(...rrMs)*10)/10,
             sdnn_ms: Math.round(sdnn*10)/10,
@@ -871,7 +938,7 @@
             rr_cv: Math.round(rrCV*10000)/10000,
             mean_r_amplitude_mv: Math.round(meanRAmp*1000)/1000,
             premature_beat_count: premature,
-            pause_count: rrMs.filter(r => r > meanRR * 1.5).length,
+            pause_count: rrMs.filter(r => r > finalMeanRR * 1.5).length,
             has_regular_pauses: false,
             total_beats: rpeaks.length,
             lf_hf_ratio: null,
@@ -1270,56 +1337,61 @@
         `).join('');
     }
 
-    // ========== 特征分析报告 (体检报告风格) ==========
+    // ========== 特征分析报告 (单线标尺) ==========
     function renderFeatureChart(data) {
         const f = data.features;
         if (!f) return;
 
-        // Medical reference ranges: { label, sub, value, unit, lo, hi, warnLo, warnHi }
-        // lo/hi = absolute min/max for track, warnLo/warnHi = normal range
+        // { label, sub, value, unit, lo, hi, warnLo, warnHi }
+        // lo/hi = track endpoints, warnLo/warnHi = healthy range (green zone)
         const items = [
             { label: '平均心率', sub: 'Mean HR', value: f.mean_hr_bpm, unit: 'bpm', lo: 30, hi: 160, warnLo: 60, warnHi: 100, color: '#C0392B' },
             { label: '心率范围', sub: 'HR Range', value: (f.max_hr_bpm||0)-(f.min_hr_bpm||0), unit: 'bpm', lo: 0, hi: 80, warnLo: 5, warnHi: 40, color: '#E74C3C' },
             { label: 'HRV SDNN', sub: '心率变异性', value: f.sdnn_ms, unit: 'ms', lo: 0, hi: 200, warnLo: 30, warnHi: 120, color: '#2471A3' },
             { label: 'HRV RMSSD', sub: '副交感活性', value: f.rmssd_ms, unit: 'ms', lo: 0, hi: 100, warnLo: 20, warnHi: 60, color: '#2E86C1' },
             { label: 'Poincaré SD1', sub: '短期变异', value: f.poincare_sd1_ms, unit: 'ms', lo: 0, hi: 80, warnLo: 10, warnHi: 40, color: '#8E44AD' },
-            { label: 'R波振幅', sub: '信号强度', value: f.mean_r_amplitude_mv, unit: 'mV', lo: 0, hi: 3, warnLo: 0.5, warnHi: 2.0, color: '#7F8C8D' },
-            { label: 'R波振幅CV', sub: '振幅变异', value: ((f.r_amplitude_std_mv||0.1)/Math.max(0.01,f.mean_r_amplitude_mv||1)*100), unit: '%', lo: 0, hi: 50, warnLo: 3, warnHi: 15, color: '#95A5A6' },
+            { label: 'R波振幅', sub: 'Signal', value: f.mean_r_amplitude_mv, unit: 'mV', lo: 0, hi: 3, warnLo: 0.5, warnHi: 2.0, color: '#7F8C8D' },
+            { label: 'R波振幅CV', sub: '变异系数', value: ((f.r_amplitude_std_mv||0.1)/Math.max(0.01,f.mean_r_amplitude_mv||1)*100), unit: '%', lo: 0, hi: 50, warnLo: 3, warnHi: 15, color: '#95A5A6' },
             { label: 'RR变异系数', sub: '节律规整度', value: (f.rr_cv||0)*100, unit: '%', lo: 0, hi: 30, warnLo: 2, warnHi: 10, color: '#2D8B4E' },
-            { label: '早搏次数', sub: 'PVC Count', value: f.premature_beat_count, unit: '次', lo: 0, hi: 50, warnLo: 0, warnHi: 5, color: '#D35400' },
-            { label: '停搏次数', sub: 'Pause Count', value: f.pause_count, unit: '次', lo: 0, hi: 20, warnLo: 0, warnHi: 2, color: '#A93226' },
-            { label: '心搏总数', sub: 'Total Beats', value: f.total_beats, unit: '次', lo: 0, hi: 200, warnLo: 30, warnHi: 150, color: '#B8860B' },
+            { label: '早搏次数', sub: 'PVC', value: f.premature_beat_count, unit: '次', lo: 0, hi: 50, warnLo: 0, warnHi: 5, color: '#D35400' },
+            { label: '停搏次数', sub: 'Pause', value: f.pause_count, unit: '次', lo: 0, hi: 20, warnLo: 0, warnHi: 2, color: '#A93226' },
+            { label: '心搏总数', sub: 'Beats', value: f.total_beats, unit: '次', lo: 0, hi: 200, warnLo: 30, warnHi: 150, color: '#B8860B' },
             { label: '记录时长', sub: 'Duration', value: f.duration_sec, unit: '秒', lo: 0, hi: 60, warnLo: 10, warnHi: 60, color: '#6C3483' },
         ];
 
-        const reportEl = document.getElementById('feature-report');
-        reportEl.innerHTML = items.map(item => {
+        const el = document.getElementById('feature-report');
+        el.innerHTML = items.map(item => {
             const v = item.value || 0;
-            const trackMin = item.lo;
-            const trackMax = item.hi;
-            const trackRange = trackMax - trackMin;
-            if (trackRange <= 0) return '';
+            const range = item.hi - item.lo;
+            if (range <= 0) return '';
 
-            // Position percentages
-            const normalLoPct = ((item.warnLo - trackMin) / trackRange) * 100;
-            const normalHiPct = ((item.warnHi - trackMin) / trackRange) * 100;
-            const markerPct = Math.max(0, Math.min(100, ((v - trackMin) / trackRange) * 100));
+            // Percentages
+            const zoneL = ((item.warnLo - item.lo) / range) * 100;
+            const zoneW = ((item.warnHi - item.warnLo) / range) * 100;
+            const dotP = Math.max(0, Math.min(100, ((v - item.lo) / range) * 100));
 
-            // Determine status color
-            let status = '#27ae60'; // green = normal
-            if (v < item.warnLo || v > item.warnHi) status = '#e74c3c'; // red = abnormal
-            else if (v < item.warnLo * 1.2 || v > item.warnHi * 0.85) status = '#f39c12'; // yellow = borderline
+            // Color: green=normal, red=out of range
+            const inRange = v >= item.warnLo && v <= item.warnHi;
+            const dotColor = inRange ? '#27ae60' : '#e74c3c';
+            const valColor = inRange ? '#27ae60' : '#e74c3c';
 
-            return `
-                <div class="report-row">
-                    <div class="report-label">${item.label}<span>${item.sub}</span></div>
-                    <div class="report-track">
-                        <div class="report-range report-normal" style="left:${normalLoPct}%;width:${normalHiPct - normalLoPct}%"></div>
-                        <div class="report-marker" style="left:${markerPct}%;background:${status}"></div>
-                    </div>
-                    <div class="report-value" style="color:${status}">${typeof v === 'number' ? (v % 1 === 0 ? v : v.toFixed(2)) : v} <span style="font-size:11px;font-weight:400;color:#999">${item.unit}</span></div>
-                    <div class="report-range-text">${item.warnLo}–${item.warnHi}</div>
-                </div>`;
+            const fmt = (typeof v === 'number' && v % 1 !== 0) ? v.toFixed(2) : v;
+
+            return `<div class="ruler-item">
+                <div class="ruler-head">
+                    <span class="ruler-name">${item.label} <small>${item.sub}</small></span>
+                    <span class="ruler-val" style="color:${valColor}">${fmt} <small>${item.unit}</small></span>
+                </div>
+                <div class="ruler-line">
+                    <div class="ruler-zone" style="left:${zoneL}%;width:${zoneW}%"></div>
+                    <div class="ruler-dot" style="left:${dotP}%;background:${dotColor}"></div>
+                </div>
+                <div class="ruler-labels">
+                    <span>${item.lo}</span>
+                    <span style="position:absolute;left:${zoneL + zoneW/2}%;transform:translateX(-50%);color:#27ae60;font-weight:500">${item.warnLo}–${item.warnHi}</span>
+                    <span>${item.hi}</span>
+                </div>
+            </div>`;
         }).join('');
     }
 

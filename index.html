@@ -68,6 +68,17 @@
             border-radius: 1rem;
             padding: 1.5rem;
         }
+        /* 体检报告滑条 · Medical Report Slider */
+        .report-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #f0ede8; }
+        .report-label { width: 100px; font-size: 13px; color: #555; flex-shrink: 0; }
+        .report-label span { display: block; font-size: 11px; color: #999; }
+        .report-track { flex: 1; height: 8px; background: #e8e4de; border-radius: 4px; position: relative; overflow: visible; }
+        .report-range { position: absolute; top: -1px; height: 10px; border-radius: 3px; opacity: 0.35; }
+        .report-normal { background: #27ae60; }
+        .report-warn { background: #f39c12; }
+        .report-marker { position: absolute; top: -5px; width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.3); transform: translateX(-50%); z-index: 2; }
+        .report-value { width: 90px; text-align: right; font-size: 14px; font-weight: 700; flex-shrink: 0; }
+        .report-range-text { width: 100px; font-size: 11px; color: #999; text-align: right; flex-shrink: 0; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -395,23 +406,6 @@
                     </div>
                 </section>
 
-                <!-- Primary diagnosis -->
-                <section class="bg-white rounded-2xl border border-gray-200 p-6 md:p-8 mb-6">
-                    <div class="flex items-start justify-between">
-                        <div>
-                            <h2 class="text-3xl font-bold tcm-title tcm-accent" id="primary-title">—</h2>
-                            <p class="text-gray-500 mt-1" id="primary-english">—</p>
-                        </div>
-                        <span class="text-2xl font-bold text-amber-700" id="primary-confidence-text">—</span>
-                    </div>
-                    <div class="flex items-center gap-3 mt-4">
-                        <div class="flex-1 confidence-bar"><div class="confidence-fill" id="primary-confidence-bar" style="width:0%"></div></div>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-4 mt-5 space-y-2">
-                        <p class="text-sm text-gray-700"><strong>判定依据：</strong><span id="primary-evidence">—</span></p>
-                        <p class="text-sm text-gray-700"><strong>临床意义：</strong><span id="primary-meaning">—</span></p>
-                    </div>
-                </section>
 
                 <!-- Constitution Card -->
                 <section id="constitution-section" class="bg-white rounded-2xl border border-gray-200 p-6 md:p-8 mb-6 hidden">
@@ -434,11 +428,13 @@
                     </div>
                 </section>
 
-                <!-- Feature Analysis -->
+                <!-- Feature Analysis — 体检报告风格 -->
                 <section class="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
-                    <h3 class="text-lg font-bold tcm-title mb-4">📋 特征分析</h3>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="feature-cards"></div>
-                    <div class="mt-4"><canvas id="feature-chart" height="180"></canvas></div>
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-bold tcm-title">📋 特征分析报告</h3>
+                        <span class="text-xs text-gray-400">参考范围 → 实测值</span>
+                    </div>
+                    <div id="feature-report" class="space-y-3"></div>
                 </section>
 
                 <!-- ECG Medical Style -->
@@ -897,7 +893,7 @@
         if (pr > 0.1 && hr < 65) candidates.push({type_cn:'结脉',type_en:'Knotted',category:'rhythm',confidence:0.85,evidence:`慢心率 + 不规则停搏`,clinical_meaning:'阴盛气结，寒痰血瘀'});
 
         if (f.rmssd_ms < 20) candidates.push({type_cn:'弦脉',type_en:'Wiry',category:'tension',confidence:0.65,evidence:`RMSSD=${f.rmssd_ms}ms (低副交感)`,clinical_meaning:'肝胆病、痛证、痰饮 — 肝气郁结'});
-        // 缓脉(60%)已移除 — 属于正常范围，不宜作为病理脉象展示
+        if (f.rmssd_ms > 50 && hr >= 55 && hr <= 78) candidates.push({type_cn:'缓脉',type_en:'Moderate',category:'tension',confidence:0.60,evidence:`RMSSD=${f.rmssd_ms}ms + 心率从容`,clinical_meaning:'正常脉或脾胃虚弱'});
 
         if (f.mean_r_amplitude_mv > 1.5) candidates.push({type_cn:'洪脉',type_en:'Flooding',category:'amplitude',confidence:0.55,evidence:`R波振幅 ${f.mean_r_amplitude_mv}mV (高)`,clinical_meaning:'气分热盛'});
         if (f.mean_r_amplitude_mv < 0.5) candidates.push({type_cn:'细脉',type_en:'Thready',category:'amplitude',confidence:0.55,evidence:`R波振幅 ${f.mean_r_amplitude_mv}mV (低)`,clinical_meaning:'气血两虚'});
@@ -920,7 +916,7 @@
 
     // ========== Demo Data ==========
     // ========== Render Analysis ==========
-    let featureChart = null, ecgChart = null;
+    let ecgChart = null;
 
     function renderAnalysis(data) {
         console.log('开始渲染分析结果:', data);
@@ -941,22 +937,7 @@
         console.log('显示结果区域');
 
         const candidates = data.candidates || [];
-        if (candidates.length === 0) {
-            document.getElementById('primary-title').textContent = '平脉（正常）';
-            document.getElementById('primary-english').textContent = 'Normal Pulse';
-            document.getElementById('primary-confidence-text').textContent = '';
-            document.getElementById('primary-confidence-bar').style.width = '100%';
-            document.getElementById('primary-evidence').textContent = '未检测到明显异常脉象特征';
-            document.getElementById('primary-meaning').textContent = '不浮不沉，不快不慢，从容和缓，节律整齐——有胃气之正常脉象';
-        } else {
-            const p = candidates[0];
-            document.getElementById('primary-title').textContent = `【${p.type_cn}】`;
-            document.getElementById('primary-english').textContent = `${p.type_en} · ${p.category}`;
-            document.getElementById('primary-confidence-text').textContent = Math.round(p.confidence*100)+'%';
-            document.getElementById('primary-confidence-bar').style.width = (p.confidence*100)+'%';
-            document.getElementById('primary-evidence').textContent = p.evidence;
-            document.getElementById('primary-meaning').textContent = p.clinical_meaning;
-        }
+        // Primary diagnosis section removed — not shown
 
         // Feature Analysis
         renderFeatureChart(data);
@@ -1289,78 +1270,57 @@
         `).join('');
     }
 
-    // ========== 特征分析图 ==========
+    // ========== 特征分析报告 (体检报告风格) ==========
     function renderFeatureChart(data) {
         const f = data.features;
         if (!f) return;
 
-        // Feature cards — key summary metrics
-        const cards = [
-            { label: '心率', value: (f.mean_hr_bpm||0).toFixed(0), unit: 'bpm', range: `${f.min_hr_bpm||'—'}-${f.max_hr_bpm||'—'}` },
-            { label: 'HRV SDNN', value: (f.sdnn_ms||0).toFixed(0), unit: 'ms', range: '心率变异性' },
-            { label: 'R波振幅', value: (f.mean_r_amplitude_mv||0).toFixed(2), unit: 'mV', range: '信号强度' },
-            { label: '心搏数', value: f.total_beats||0, unit: '次', range: `${f.duration_sec||0}秒` },
-            { label: 'HRV RMSSD', value: (f.rmssd_ms||0).toFixed(0), unit: 'ms', range: '副交感活性' },
-            { label: '早搏', value: f.premature_beat_count||0, unit: '次', range: '异位心搏' },
-        ];
-        document.getElementById('feature-cards').innerHTML = cards.map(c => `
-            <div class="rounded-xl p-4 text-center" style="background: linear-gradient(135deg, #FDF8F0 0%, #F5EDE0 100%); border: 1px solid #E8DDD0;">
-                <p class="text-xs text-gray-500">${c.label}</p>
-                <p class="text-2xl font-bold tcm-title" style="color:#8B2500">${c.value}</p>
-                <p class="text-xs text-gray-400">${c.unit} · ${c.range}</p>
-            </div>
-        `).join('');
-
-        // Comprehensive bar chart — ALL features used by the app
-        // Each value normalized to 0-100 for visual comparison
-        const clamp = (v, lo=0, hi=100) => Math.max(lo, Math.min(hi, v));
-        const features = [
-            { label: '平均心率', value: clamp(f.mean_hr_bpm / 1.5), color: '#C0392B', raw: (f.mean_hr_bpm||0).toFixed(0)+' bpm' },
-            { label: '心率范围', value: clamp(((f.max_hr_bpm||0) - (f.min_hr_bpm||0)) / 2), color: '#E74C3C', raw: `${f.min_hr_bpm||'—'}-${f.max_hr_bpm||'—'}` },
-            { label: 'SDNN', value: clamp((f.sdnn_ms||0) / 1.5), color: '#2471A3', raw: (f.sdnn_ms||0).toFixed(1)+' ms' },
-            { label: 'RMSSD', value: clamp((f.rmssd_ms||0) / 1.0), color: '#2E86C1', raw: (f.rmssd_ms||0).toFixed(1)+' ms' },
-            { label: 'Poincaré SD1', value: clamp((f.poincare_sd1_ms||0) / 0.6), color: '#8E44AD', raw: (f.poincare_sd1_ms||0).toFixed(1)+' ms' },
-            { label: 'R波振幅', value: clamp(f.mean_r_amplitude_mv / 0.03), color: '#7F8C8D', raw: (f.mean_r_amplitude_mv||0).toFixed(2)+' mV' },
-            { label: 'R波振幅CV', value: clamp(((f.r_amplitude_std_mv||0.1) / Math.max(0.01, f.mean_r_amplitude_mv||1)) * 200), color: '#95A5A6', raw: (((f.r_amplitude_std_mv||0.1) / Math.max(0.01, f.mean_r_amplitude_mv||1))*100).toFixed(1)+'%' },
-            { label: 'RR变异系数', value: clamp((f.rr_cv||0) * 500), color: '#2D8B4E', raw: ((f.rr_cv||0)*100).toFixed(1)+'%' },
-            { label: '早搏次数', value: clamp(f.premature_beat_count * 20), color: '#D35400', raw: (f.premature_beat_count||0)+' 次' },
-            { label: '停搏次数', value: clamp(f.pause_count * 25), color: '#A93226', raw: (f.pause_count||0)+' 次' },
-            { label: '心搏总数', value: clamp((f.total_beats||0) / 1.5), color: '#B8860B', raw: (f.total_beats||0)+' 次' },
-            { label: '记录时长', value: clamp((f.duration_sec||0) / 0.6), color: '#6C3483', raw: (f.duration_sec||0)+' 秒' },
+        // Medical reference ranges: { label, sub, value, unit, lo, hi, warnLo, warnHi }
+        // lo/hi = absolute min/max for track, warnLo/warnHi = normal range
+        const items = [
+            { label: '平均心率', sub: 'Mean HR', value: f.mean_hr_bpm, unit: 'bpm', lo: 30, hi: 160, warnLo: 60, warnHi: 100, color: '#C0392B' },
+            { label: '心率范围', sub: 'HR Range', value: (f.max_hr_bpm||0)-(f.min_hr_bpm||0), unit: 'bpm', lo: 0, hi: 80, warnLo: 5, warnHi: 40, color: '#E74C3C' },
+            { label: 'HRV SDNN', sub: '心率变异性', value: f.sdnn_ms, unit: 'ms', lo: 0, hi: 200, warnLo: 30, warnHi: 120, color: '#2471A3' },
+            { label: 'HRV RMSSD', sub: '副交感活性', value: f.rmssd_ms, unit: 'ms', lo: 0, hi: 100, warnLo: 20, warnHi: 60, color: '#2E86C1' },
+            { label: 'Poincaré SD1', sub: '短期变异', value: f.poincare_sd1_ms, unit: 'ms', lo: 0, hi: 80, warnLo: 10, warnHi: 40, color: '#8E44AD' },
+            { label: 'R波振幅', sub: '信号强度', value: f.mean_r_amplitude_mv, unit: 'mV', lo: 0, hi: 3, warnLo: 0.5, warnHi: 2.0, color: '#7F8C8D' },
+            { label: 'R波振幅CV', sub: '振幅变异', value: ((f.r_amplitude_std_mv||0.1)/Math.max(0.01,f.mean_r_amplitude_mv||1)*100), unit: '%', lo: 0, hi: 50, warnLo: 3, warnHi: 15, color: '#95A5A6' },
+            { label: 'RR变异系数', sub: '节律规整度', value: (f.rr_cv||0)*100, unit: '%', lo: 0, hi: 30, warnLo: 2, warnHi: 10, color: '#2D8B4E' },
+            { label: '早搏次数', sub: 'PVC Count', value: f.premature_beat_count, unit: '次', lo: 0, hi: 50, warnLo: 0, warnHi: 5, color: '#D35400' },
+            { label: '停搏次数', sub: 'Pause Count', value: f.pause_count, unit: '次', lo: 0, hi: 20, warnLo: 0, warnHi: 2, color: '#A93226' },
+            { label: '心搏总数', sub: 'Total Beats', value: f.total_beats, unit: '次', lo: 0, hi: 200, warnLo: 30, warnHi: 150, color: '#B8860B' },
+            { label: '记录时长', sub: 'Duration', value: f.duration_sec, unit: '秒', lo: 0, hi: 60, warnLo: 10, warnHi: 60, color: '#6C3483' },
         ];
 
-        if (featureChart) featureChart.destroy();
-        featureChart = new Chart(document.getElementById('feature-chart'), {
-            type: 'bar',
-            data: {
-                labels: features.map(f => f.label),
-                datasets: [{
-                    data: features.map(f => Math.round(f.value)),
-                    backgroundColor: features.map(f => f.color + '88'),
-                    borderColor: features.map(f => f.color),
-                    borderWidth: 1,
-                    borderRadius: 4,
-                }]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false, animation: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: ctx => {
-                                const item = features[ctx.dataIndex];
-                                return item ? `${item.label}: ${item.raw}` : '';
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    y: { beginAtZero: true, max: 100, ticks: { display: false }, grid: { color: 'rgba(0,0,0,0.04)' } },
-                    x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 45 } }
-                }
-            }
-        });
+        const reportEl = document.getElementById('feature-report');
+        reportEl.innerHTML = items.map(item => {
+            const v = item.value || 0;
+            const trackMin = item.lo;
+            const trackMax = item.hi;
+            const trackRange = trackMax - trackMin;
+            if (trackRange <= 0) return '';
+
+            // Position percentages
+            const normalLoPct = ((item.warnLo - trackMin) / trackRange) * 100;
+            const normalHiPct = ((item.warnHi - trackMin) / trackRange) * 100;
+            const markerPct = Math.max(0, Math.min(100, ((v - trackMin) / trackRange) * 100));
+
+            // Determine status color
+            let status = '#27ae60'; // green = normal
+            if (v < item.warnLo || v > item.warnHi) status = '#e74c3c'; // red = abnormal
+            else if (v < item.warnLo * 1.2 || v > item.warnHi * 0.85) status = '#f39c12'; // yellow = borderline
+
+            return `
+                <div class="report-row">
+                    <div class="report-label">${item.label}<span>${item.sub}</span></div>
+                    <div class="report-track">
+                        <div class="report-range report-normal" style="left:${normalLoPct}%;width:${normalHiPct - normalLoPct}%"></div>
+                        <div class="report-marker" style="left:${markerPct}%;background:${status}"></div>
+                    </div>
+                    <div class="report-value" style="color:${status}">${typeof v === 'number' ? (v % 1 === 0 ? v : v.toFixed(2)) : v} <span style="font-size:11px;font-weight:400;color:#999">${item.unit}</span></div>
+                    <div class="report-range-text">${item.warnLo}–${item.warnHi}</div>
+                </div>`;
+        }).join('');
     }
 
     // ========== 医疗级 ECG ==========

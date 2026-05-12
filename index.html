@@ -828,18 +828,38 @@
     }
 
     function extractFeatures(voltage, fs) {
-        // === R-peak detection (Pan-Tompkins inspired) ===
-        // Step 1: Adaptive threshold at 65% of max (avoid T-wave/f noise)
-        const maxV = Math.max(...voltage);
-        const minV = Math.min(...voltage);
-        const threshold = minV + (maxV - minV) * 0.65;
+        // === Bandpass filter (5-15Hz) — removes baseline wander + high-freq noise ===
+        // Simple 2nd-order Butterworth approximation via cascaded biquad
+        function bandpass5_15Hz(sig, fs) {
+            const n = sig.length;
+            const out = new Float64Array(n);
+            // High-pass at 5Hz (remove baseline wander)
+            const rc = 1 / (2 * Math.PI * 5);
+            const dt = 1 / fs;
+            const alpha = rc / (rc + dt);
+            let hpPrev = 0;
+            for (let i = 0; i < n; i++) { hpPrev = alpha * (hpPrev + sig[i] - (i > 0 ? sig[i-1] : 0)); out[i] = hpPrev; }
+            // Low-pass at 15Hz (remove high-freq noise)
+            const rc2 = 1 / (2 * Math.PI * 15);
+            const alpha2 = dt / (rc2 + dt);
+            let lpPrev = 0;
+            for (let i = 0; i < n; i++) { lpPrev += alpha2 * (out[i] - lpPrev); out[i] = lpPrev; }
+            return out;
+        }
+        const filtered = bandpass5_15Hz(voltage, fs);
 
-        // Step 2: Find raw peaks above threshold
+        // === R-peak detection (Pan-Tompkins inspired) ===
+        // Step 1: Adaptive threshold at 60% of filtered signal range
+        const maxV = Math.max(...filtered);
+        const minV = Math.min(...filtered);
+        const threshold = minV + (maxV - minV) * 0.60;
+
+        // Step 2: Find raw peaks above threshold (on filtered signal)
         const rawPeaks = [];
         let inPeak = false;
         let peakMax = -Infinity, peakIdx = 0;
-        for (let i = 0; i < voltage.length; i++) {
-            if (voltage[i] > threshold) {
+        for (let i = 0; i < filtered.length; i++) {
+            if (filtered[i] > threshold) {
                 if (!inPeak) { inPeak = true; peakMax = voltage[i]; peakIdx = i; }
                 else if (voltage[i] > peakMax) { peakMax = voltage[i]; peakIdx = i; }
             } else if (inPeak) {
@@ -881,10 +901,10 @@
             const retryThreshold = minV + (maxV - minV) * 0.80;
             const retryRaw = [];
             inPeak = false;
-            for (let i = 0; i < voltage.length; i++) {
-                if (voltage[i] > retryThreshold) {
-                    if (!inPeak) { inPeak = true; peakMax = voltage[i]; peakIdx = i; }
-                    else if (voltage[i] > peakMax) { peakMax = voltage[i]; peakIdx = i; }
+            for (let i = 0; i < filtered.length; i++) {
+                if (filtered[i] > retryThreshold) {
+                    if (!inPeak) { inPeak = true; peakMax = filtered[i]; peakIdx = i; }
+                    else if (filtered[i] > peakMax) { peakMax = filtered[i]; peakIdx = i; }
                 } else if (inPeak) {
                     retryRaw.push({ idx: peakIdx, amp: peakMax });
                     inPeak = false; peakMax = -Infinity;

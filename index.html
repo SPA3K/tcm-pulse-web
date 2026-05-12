@@ -1039,6 +1039,35 @@
         if (f.rr_cv < 0.03 && f.premature_beat_count === 0) candidates.push({type_cn:'滑脉',type_en:'Slippery',category:'smoothness',confidence:0.50,evidence:`RR变异系数 ${f.rr_cv} (极规整)`,clinical_meaning:'痰湿、食积、妊娠'});
         if (f.rr_cv > 0.10) candidates.push({type_cn:'涩脉',type_en:'Choppy',category:'smoothness',confidence:0.45,evidence:`RR变异系数 ${f.rr_cv} (不规整)`,clinical_meaning:'气滞血瘀'});
 
+        // === Waveform-shape features (from literature) ===
+        // QRS width: wide QRS → 脉道紧张/弦脉; narrow → 细脉
+        if (f.qrs_width_ms > 120) {
+            candidates.push({type_cn:'弦脉',type_en:'Wiry-waveform',category:'waveform',confidence:0.55,evidence:`QRS宽度 ${f.qrs_width_ms}ms (宽) — 脉道紧张`,clinical_meaning:'肝气郁结，脉道拘急'});
+        }
+        if (f.qrs_width_ms > 0 && f.qrs_width_ms < 60) {
+            candidates.push({type_cn:'细脉',type_en:'Thready-waveform',category:'waveform',confidence:0.50,evidence:`QRS宽度 ${f.qrs_width_ms}ms (窄) — 脉体细弱`,clinical_meaning:'气血两虚，脉道不充'});
+        }
+
+        // Rise time: fast rise → 有力脉(洪/实); slow rise → 无力脉(细/弱)
+        if (f.rise_time_ms > 0 && f.rise_time_ms < 20) {
+            candidates.push({type_cn:'洪脉',type_en:'Flooding-rise',category:'waveform',confidence:0.50,evidence:`升支时间 ${f.rise_time_ms}ms (快速上升) — 来势汹涌`,clinical_meaning:'气分热盛，脉来有力'});
+        }
+        if (f.rise_time_ms > 80) {
+            candidates.push({type_cn:'弱脉',type_en:'Weak-rise',category:'waveform',confidence:0.45,evidence:`升支时间 ${f.rise_time_ms}ms (缓慢上升) — 脉来无力`,clinical_meaning:'阳气虚衰，鼓动无力'});
+        }
+
+        // Irregularity index: high → 涩脉/血瘀; can reinforce existing classification
+        if (f.irregularity_index > 0.08) {
+            // Check if 涩脉 already classified, if so boost confidence
+            const existingChoppy = candidates.find(c => c.type_cn === '涩脉');
+            if (existingChoppy) {
+                existingChoppy.confidence = Math.min(0.80, existingChoppy.confidence + 0.15);
+                existingChoppy.evidence += ` + 不规则指数 ${(f.irregularity_index*100).toFixed(1)}%`;
+            } else {
+                candidates.push({type_cn:'涩脉',type_en:'Choppy-irregular',category:'waveform',confidence:0.50,evidence:`不规则指数 ${(f.irregularity_index*100).toFixed(1)}% (高) — 往来艰涩`,clinical_meaning:'气滞血瘀，脉道不畅'});
+            }
+        }
+
         // === Compound patterns (multi-label overlap) ===
         // 弦数脉: wiry + rapid → liver fire
         const hasWiry = candidates.some(c => c.type_cn === '弦脉');

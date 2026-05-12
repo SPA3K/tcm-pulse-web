@@ -36,7 +36,7 @@ python web/app.py
 ```
 
 **完整功能**：
-- ✅ 18 维特征提取（vs Web版基础判断）
+- ✅ 21 维特征提取（vs Web版基础判断）
 - ✅ LLM 辅助辨证论治（Claude API）
 - ✅ 知识库 RAG 检索（经典文献 + 教学视频）
 - ✅ 体质推断与养生建议
@@ -51,7 +51,7 @@ python web/app.py
 | 功能 | Web 快速版 | Skill 完整版 |
 |------|-----------|------------|
 | 基础脉象识别 | ✅ 11种 | ✅ 11种 + 辅助4种 |
-| 特征维度 | 基础判断 | 18维完整提取 |
+| 特征维度 | 基础判断 | 21维完整提取 |
 | LLM 辨证 | ❌ | ✅ Claude API |
 | 知识库检索 | ❌ | ✅ RAG 检索 |
 | 体质推断 | ❌ | ✅ |
@@ -149,7 +149,7 @@ python web/app.py
 | **张力** | "压力指数"（1维） | SDNN + RMSSD + pNN50 + LF/HF（4维） |
 | **流畅度** | 无 | Poincaré SD1 + RR粗糙度（2维） |
 | **波形** | 无 | QRS宽度 + 信号质量（2维） |
-| **合计** | **2维** | **18维** |
+| **合计** | **2维** | **21维** |
 
 ### 分析深度对比
 
@@ -260,7 +260,7 @@ $ python3 analyze_ecg.py
 ✅ 数据加载完成: 15360 个采样点
 
 🔬 正在提取 18 维特征...
-✅ 特征提取完成 (频率、节律、振幅、张力、流畅度 5 大维度)
+✅ 特征提取完成 (频率、节律、振幅、张力、流畅度 5 大维度, 21维特征)
 
 🏥 正在进行脉象分类...
 ✅ 识别到主脉 1 种、兼脉 1 种
@@ -599,20 +599,41 @@ $ python3 analyze_ecg.py
 
 ---
 
-## 🤝 贡献指南
+## 📚 参考文献
 
-欢迎提交 Issue 和 Pull Request！
+本项目的脉象分类算法和特征提取方法参考了以下学术文献：
 
-- 报告 Bug：[GitHub Issues](https://github.com/SPA3K/tcm-pulse-web/issues)
-- 功能建议：[Discussions](https://github.com/SPA3K/tcm-pulse-web/discussions)
-- 代码贡献：Fork → Branch → Pull Request
+1. **Zhang J, et al.** "AI: Bridging Ancient Wisdom and Modern Innovation in Traditional Chinese Medicine." *JMIR Medical Informatics*, 2024.
+   DOI: [10.2196/58491](https://doi.org/10.2196/58491)
+   - 中医AI全景综述，涵盖舌诊、脉诊、问诊各方向
 
-### 贡献者
+2. **Li X, et al.** "Wearable multichannel-active pressurized pulse sensing platform." *Microsystems & Nanoengineering (Nature子刊)*, 2024.
+   DOI: [10.1038/s41378-024-00703-7](https://doi.org/10.1038/s41378-024-00703-7)
+   - 三通道脉搏监测+机器学习，可穿戴脉诊标杆论文
+
+3. **Liu H, et al.** "Classification research of TCM pulse conditions based on multi-label voice analysis." *Journal of Traditional Chinese Medical Sciences*, 2024.
+   DOI: [10.1016/j.jtcms.2024.03.008](https://doi.org/10.1016/j.jtcms.2024.03.008)
+   - 多标签脉象分类方法（本项目分类算法参考）
+
+4. **Zhu H, et al.** "A Novel Microfluidic Pressure Sensor for Traditional Chinese Medicine Pulse Data Collection and Analysis." *SCITEPRESS*, 2023.
+   DOI: [10.5220/0011679000003443](https://doi.org/10.5220/0011679000003443)
+   - 微流控脉搏传感器+AI分析
+
+5. **Frontiers Review** "Artificial Intelligence for Traditional Chinese Medicine Pulse Diagnosis: A Review." *Frontiers in Bioengineering and Biotechnology*, 2022.
+   DOI: [10.3389/fbioe.2022.1010358](https://doi.org/10.3389/fbioe.2022.1010358)
+   - 信号处理管线、特征提取方法、ML/DL分类方法综述
+
+---
+
+## 🤝 致谢
 
 - **[SPA3K](https://github.com/SPA3K)** - 项目创建者与维护者
 - **[Claude Sonnet 4.5](https://claude.ai)** - AI 协作开发者
+- **论文作者团队** - 感谢 Zhang J, Li X, Liu H, Zhu H 等学者的研究为本项目提供的理论基础
+- **Apple** - 提供 Apple Watch ECG 传感器数据
+- **开源社区** - NeuroKit2、Chart.js、Tailwind CSS 等优秀工具
 
-感谢所有为本项目做出贡献的开发者！
+感谢所有为本项目做出贡献的开发者和研究者！
 
 ---
 

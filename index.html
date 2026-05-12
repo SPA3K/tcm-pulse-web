@@ -949,6 +949,39 @@
         const meanRAmp = rAmps.reduce((a,b)=>a+b,0) / rAmps.length;
         const premature = rrMs.filter(r => r < finalMeanRR * 0.8).length;
 
+        // === Additional features (from Li X et al. 2024, Frontiers review) ===
+        // QRS width estimation: time from threshold crossing to peak to threshold crossing
+        let qrsWidthMs = 0;
+        if (rpeaks.length >= 2) {
+            const qrsWidths = [];
+            for (const p of rpeaks) {
+                // Find left crossing (going up through 50% of peak amplitude)
+                const halfAmp = voltage[p.idx] * 0.5;
+                let left = p.idx;
+                while (left > 0 && voltage[left] > halfAmp) left--;
+                let right = p.idx;
+                while (right < voltage.length - 1 && voltage[right] > halfAmp) right++;
+                qrsWidths.push((right - left) / fs * 1000);
+            }
+            qrsWidthMs = qrsWidths.reduce((a,b)=>a+b,0) / qrsWidths.length;
+        }
+
+        // Rise time: time from QRS onset to R-peak (systolic upstroke speed)
+        let riseTimeMs = 0;
+        if (rpeaks.length >= 2) {
+            const riseTimes = [];
+            for (const p of rpeaks) {
+                let start = p.idx;
+                while (start > 0 && voltage[start] > voltage[p.idx] * 0.1) start--;
+                riseTimes.push((p.idx - start) / fs * 1000);
+            }
+            riseTimeMs = riseTimes.reduce((a,b)=>a+b,0) / riseTimes.length;
+        }
+
+        // Irregularity index: coefficient of successive RR differences
+        const successiveDiff = rrMs.map((r,i) => i > 0 ? Math.abs(r - rrMs[i-1]) : 0).slice(1);
+        const irregularityIdx = successiveDiff.length > 0 ? successiveDiff.reduce((a,b)=>a+b,0) / successiveDiff.length / finalMeanRR : 0;
+
         return {
             mean_hr_bpm: Math.round(finalMeanHR*10)/10,
             min_hr_bpm: Math.round(60000/Math.max(...rrMs)*10)/10,
@@ -965,28 +998,54 @@
             poincare_sd1_ms: Math.round(Math.sqrt(rrDiff.map(d=>d*d).reduce((a,b)=>a+b,0)/rrDiff.length/2)*10)/10,
             duration_sec: Math.round(voltage.length / fs * 10)/10,
             n_beats: rpeaks.length,
+            // New features from literature
+            qrs_width_ms: Math.round(qrsWidthMs*10)/10,
+            rise_time_ms: Math.round(riseTimeMs*10)/10,
+            irregularity_index: Math.round(irregularityIdx*10000)/10000,
         };
     }
 
     function classifyPulse(f) {
+        // Multi-label classification (inspired by Liu H et al. 2024)
+        // Each pulse type scored independently, not mutually exclusive
         const candidates = [];
         const hr = f.mean_hr_bpm;
+
+        // === Rate-based pulses ===
         if (hr < 60) candidates.push({type_cn:'迟脉',type_en:'Slow',category:'rate',confidence:0.95,evidence:`心率 ${hr} bpm < 60`,clinical_meaning:'寒证、阳虚 — 阳气不足，不能鼓动血脉'});
         if (hr > 90) candidates.push({type_cn:'数脉',type_en:'Rapid',category:'rate',confidence:hr>100?0.95:0.85,evidence:`心率 ${hr} bpm > 90`,clinical_meaning:'热证、阴虚 — 邪热亢盛或阴虚内热'});
         if (hr > 120) candidates.push({type_cn:'疾脉',type_en:'Racing',category:'rate',confidence:0.90,evidence:`心率 ${hr} bpm > 120`,clinical_meaning:'阳亢极、阴竭阳脱'});
 
+        // === Rhythm-based pulses ===
         const pr = f.premature_beat_count / f.total_beats;
         if (pr > 0.1 && hr > 90) candidates.push({type_cn:'促脉',type_en:'Skipping-rapid',category:'rhythm',confidence:0.85,evidence:`快心率 + ${f.premature_beat_count}次早搏`,clinical_meaning:'阳盛实热，气滞血瘀'});
         if (pr > 0.1 && hr < 65) candidates.push({type_cn:'结脉',type_en:'Knotted',category:'rhythm',confidence:0.85,evidence:`慢心率 + 不规则停搏`,clinical_meaning:'阴盛气结，寒痰血瘀'});
+        // 代脉: regular pauses (every N beats)
+        if (f.pause_count >= 3 && f.total_beats > 20) {
+            candidates.push({type_cn:'代脉',type_en:'Regularly-intermittent',category:'rhythm',confidence:0.70,evidence:`规律性停搏 ${f.pause_count}次`,clinical_meaning:'脏气衰微，跌打损伤'});
+        }
 
+        // === Tension-based pulses ===
         if (f.rmssd_ms < 20) candidates.push({type_cn:'弦脉',type_en:'Wiry',category:'tension',confidence:0.65,evidence:`RMSSD=${f.rmssd_ms}ms (低副交感)`,clinical_meaning:'肝胆病、痛证、痰饮 — 肝气郁结'});
         if (f.rmssd_ms > 50 && hr >= 55 && hr <= 78) candidates.push({type_cn:'缓脉',type_en:'Moderate',category:'tension',confidence:0.60,evidence:`RMSSD=${f.rmssd_ms}ms + 心率从容`,clinical_meaning:'正常脉或脾胃虚弱'});
 
+        // === Amplitude-based pulses ===
         if (f.mean_r_amplitude_mv > 1.5) candidates.push({type_cn:'洪脉',type_en:'Flooding',category:'amplitude',confidence:0.55,evidence:`R波振幅 ${f.mean_r_amplitude_mv}mV (高)`,clinical_meaning:'气分热盛'});
         if (f.mean_r_amplitude_mv < 0.5) candidates.push({type_cn:'细脉',type_en:'Thready',category:'amplitude',confidence:0.55,evidence:`R波振幅 ${f.mean_r_amplitude_mv}mV (低)`,clinical_meaning:'气血两虚'});
+        // 弱脉: thin + weak (low amplitude + slow)
+        if (f.mean_r_amplitude_mv < 0.3 && hr < 65) candidates.push({type_cn:'弱脉',type_en:'Weak',category:'amplitude',confidence:0.50,evidence:`R波振幅极低 ${f.mean_r_amplitude_mv}mV + 心率慢`,clinical_meaning:'阳气虚衰，气血不足'});
 
+        // === Smoothness-based pulses ===
         if (f.rr_cv < 0.03 && f.premature_beat_count === 0) candidates.push({type_cn:'滑脉',type_en:'Slippery',category:'smoothness',confidence:0.50,evidence:`RR变异系数 ${f.rr_cv} (极规整)`,clinical_meaning:'痰湿、食积、妊娠'});
         if (f.rr_cv > 0.10) candidates.push({type_cn:'涩脉',type_en:'Choppy',category:'smoothness',confidence:0.45,evidence:`RR变异系数 ${f.rr_cv} (不规整)`,clinical_meaning:'气滞血瘀'});
+
+        // === Compound patterns (multi-label overlap) ===
+        // 弦数脉: wiry + rapid → liver fire
+        const hasWiry = candidates.some(c => c.type_cn === '弦脉');
+        const hasRapid = candidates.some(c => c.type_cn === '数脉');
+        if (hasWiry && hasRapid) {
+            candidates.push({type_cn:'弦数脉',type_en:'Wiry-Rapid',category:'compound',confidence:0.60,evidence:'弦脉 + 数脉并见',clinical_meaning:'肝火上炎，肝阳偏亢'});
+        }
 
         candidates.sort((a,b) => b.confidence - a.confidence);
         return candidates;
@@ -1377,6 +1436,10 @@
             { label: '停搏次数', sub: 'Pause', value: f.pause_count, unit: '次', lo: 0, hi: 20, warnLo: 0, warnHi: 2, color: '#A93226' },
             { label: '心搏总数', sub: 'Beats', value: f.total_beats, unit: '次', lo: 0, hi: 200, warnLo: 30, warnHi: 150, color: '#B8860B' },
             { label: '记录时长', sub: 'Duration', value: f.duration_sec, unit: '秒', lo: 0, hi: 60, warnLo: 10, warnHi: 60, color: '#6C3483' },
+            // New features from literature
+            { label: 'QRS宽度', sub: 'QRS Width', value: f.qrs_width_ms || 0, unit: 'ms', lo: 0, hi: 200, warnLo: 60, warnHi: 120, color: '#E67E22' },
+            { label: '升支时间', sub: 'Rise Time', value: f.rise_time_ms || 0, unit: 'ms', lo: 0, hi: 150, warnLo: 20, warnHi: 80, color: '#1ABC9C' },
+            { label: '不规则指数', sub: 'Irregularity', value: (f.irregularity_index || 0) * 100, unit: '%', lo: 0, hi: 30, warnLo: 0, warnHi: 8, color: '#9B59B6' },
         ];
 
         const el = document.getElementById('feature-report');

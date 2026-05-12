@@ -18,6 +18,56 @@
         .page { display: none; } .page.active { display: block; }
         .tab-btn { transition: all 0.2s; }
         .tab-btn.active { color: var(--tcm-red); border-bottom: 2px solid var(--tcm-red); }
+        /* 古风 · Traditional Chinese Medicine Aesthetics */
+        body {
+            background: var(--tcm-paper);
+            background-image:
+                repeating-linear-gradient(
+                    0deg,
+                    transparent,
+                    transparent 28px,
+                    rgba(139,37,0,0.015) 28px,
+                    rgba(139,37,0,0.015) 29px
+                ),
+                repeating-linear-gradient(
+                    90deg,
+                    transparent,
+                    transparent 28px,
+                    rgba(139,37,0,0.015) 28px,
+                    rgba(139,37,0,0.015) 29px
+                );
+            background-size: 29px 29px;
+        }
+        .wuxing-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 50%;
+            font-weight: 700;
+            font-size: 1rem;
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            font-family: 'STKaiti', 'KaiTi', serif;
+        }
+        .ecg-medical {
+            background: #0a0a0a;
+            border: 2px solid #1a3a1a;
+            border-radius: 1rem;
+            box-shadow: 0 0 20px rgba(34,197,94,0.05), inset 0 0 60px rgba(0,0,0,0.3);
+        }
+        .ecg-medical canvas {
+            background: #020a02;
+            border-radius: 0.5rem;
+            border: 1px solid #1a3a1a;
+        }
+        .feature-chart {
+            background: linear-gradient(135deg, #FDF8F0 0%, #F5EDE0 100%);
+            border: 1px solid #E8DDD0;
+            border-radius: 1rem;
+            padding: 1.5rem;
+        }
     </style>
 </head>
 <body class="min-h-screen">
@@ -310,12 +360,12 @@
                             <p class="text-gray-600">每种体质附带详细的身体表现描述、成因分析，以及对应的中医调养建议（饮食、起居、情志）。</p>
                         </div>
                         <div class="bg-white rounded-xl p-4 border border-gray-200">
-                            <p class="font-medium tcm-accent mb-2">📊 五维雷达图</p>
-                            <p class="text-gray-600">频率（迟/数）、节律（促/结/代）、振幅（洪/细）、张力（弦/缓）、流畅度（滑/涩）五个维度的可视化评估。</p>
+                            <p class="font-medium tcm-accent mb-2">📊 特征分析</p>
+                            <p class="text-gray-600">心率偏离、节律变异、振幅稳定、HRV水平等关键指标的柱状图分析。</p>
                         </div>
                         <div class="bg-white rounded-xl p-4 border border-gray-200">
                             <p class="font-medium tcm-accent mb-2">💓 脉象分类</p>
-                            <p class="text-gray-600">识别11种中医脉象，包括主脉判定、兼脉分析、相兼脉组合解读，附带置信度和临床意义。</p>
+                            <p class="text-gray-600">识别11种中医脉象，包括主脉判定、置信度评估和临床意义分析。</p>
                         </div>
                     </div>
                 </div>
@@ -327,8 +377,8 @@
                 <section id="health-score-section" class="mb-6 rounded-2xl p-6 md:p-8 text-white" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);">
                     <div class="flex items-center justify-between mb-5">
                         <div>
-                            <p class="text-xs opacity-60 tracking-widest uppercase">QIHUANG HEALTH INDEX</p>
-                            <h2 class="text-2xl font-bold mt-1">岐黄健康指数</h2>
+                            <p class="text-xs opacity-60 tracking-widest uppercase">QIHUANG · 五行健康脉象</p>
+                            <h2 class="text-2xl font-bold mt-1">健康年龄</h2>
                         </div>
                         <div class="text-right">
                             <span id="total-score" class="text-5xl font-black">—</span>
@@ -337,7 +387,7 @@
                     </div>
                     <div class="space-y-3" id="score-bars"></div>
                     <div class="mt-5 pt-4 border-t border-white/10 flex items-center justify-between">
-                        <p class="text-xs opacity-50">基于Apple Watch ECG 512Hz波形 · 五维综合评估</p>
+                        <p class="text-xs opacity-50">基于Apple Watch ECG 512Hz波形 · 五行综合评估</p>
                         <button onclick="copyFullReport()" class="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm transition" id="copy-btn-top">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
                             一键复制 · 粘贴到AI对话
@@ -384,35 +434,24 @@
                     </div>
                 </section>
 
-                <!-- Secondary -->
-                <section id="secondary-section" class="mb-6 hidden">
-                    <h3 class="text-lg font-bold tcm-title mb-3">兼脉</h3>
-                    <div id="secondary-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+                <!-- Feature Analysis -->
+                <section class="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+                    <h3 class="text-lg font-bold tcm-title mb-4">📋 特征分析</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="feature-cards"></div>
+                    <div class="mt-4"><canvas id="feature-chart" height="180"></canvas></div>
                 </section>
 
-                <!-- Charts -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <section class="bg-white rounded-2xl border border-gray-200 p-6">
-                        <h3 class="text-lg font-bold tcm-title mb-4">五维脉象图</h3>
-                        <div class="aspect-square max-w-[280px] mx-auto"><canvas id="radar-chart"></canvas></div>
-                    </section>
-                    <section class="bg-white rounded-2xl border border-gray-200 p-6">
-                        <h3 class="text-lg font-bold tcm-title mb-4">关键指标</h3>
-                        <div class="space-y-2" id="metrics-list"></div>
-                    </section>
-                </div>
-
                 <!-- ECG Medical Style -->
-                <section id="ecg-section" class="rounded-2xl p-6 mb-6 hidden" style="background: #0a0a0a;">
+                <section id="ecg-section" class="rounded-2xl p-6 mb-6 hidden" style="background: #0a0a0a; border: 2px solid #1a3a1a;">
                     <div class="flex items-center justify-between mb-4">
                         <div>
-                            <p class="text-xs text-green-400/60 tracking-widest">ECG WAVEFORM · 512Hz</p>
-                            <h3 class="text-lg font-bold text-green-400">心电波形</h3>
+                            <p class="text-xs text-green-400/60 tracking-widest">ECG LEAD I · 512Hz SAMPLING</p>
+                            <h3 class="text-lg font-bold text-green-400">心电波形 · ECG Waveform</h3>
                         </div>
                         <div class="flex gap-4 text-xs text-green-400/70" id="ecg-annotations"></div>
                     </div>
-                    <div class="w-full overflow-x-auto rounded-lg" style="background: #050505; border: 1px solid #1a3a1a;">
-                        <canvas id="ecg-chart" height="200"></canvas>
+                    <div class="w-full overflow-x-auto rounded-lg" style="background: #020a02; border: 1px solid #1a3a1a; padding: 8px;">
+                        <canvas id="ecg-chart" height="220"></canvas>
                     </div>
                     <div class="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2" id="ecg-cards"></div>
                 </section>
@@ -881,7 +920,7 @@
 
     // ========== Demo Data ==========
     // ========== Render Analysis ==========
-    let radarChart = null, ecgChart = null;
+    let featureChart = null, ecgChart = null;
 
     function renderAnalysis(data) {
         console.log('开始渲染分析结果:', data);
@@ -919,50 +958,8 @@
             document.getElementById('primary-meaning').textContent = p.clinical_meaning;
         }
 
-        // Secondary
-        const sec = candidates.slice(1).filter(c=>c.confidence>=0.45);
-        const secSection = document.getElementById('secondary-section');
-        if (sec.length > 0) {
-            secSection.classList.remove('hidden');
-            document.getElementById('secondary-list').innerHTML = sec.slice(0,4).map(c=>`
-                <div class="bg-gray-50 rounded-lg p-4 border border-gray-100">
-                    <div class="flex justify-between items-center mb-1">
-                        <span class="font-medium">${c.type_cn} <span class="text-gray-400 text-sm">${c.type_en}</span></span>
-                        <span class="text-sm text-amber-700 font-bold">${Math.round(c.confidence*100)}%</span>
-                    </div>
-                    <p class="text-xs text-gray-500">${c.clinical_meaning}</p>
-                </div>`).join('');
-        } else { secSection.classList.add('hidden'); }
-
-        // Metrics
-        const f = data.features;
-        const metrics = [
-            {label:'心率', value:f.mean_hr_bpm?f.mean_hr_bpm+' bpm':'—', sub:f.min_hr_bpm?`范围 ${f.min_hr_bpm}-${f.max_hr_bpm}`:'' },
-            {label:'HRV SDNN', value:f.sdnn_ms?f.sdnn_ms+' ms':'—', sub:'心率变异性' },
-            {label:'HRV RMSSD', value:f.rmssd_ms?f.rmssd_ms+' ms':'—', sub:'副交感活性' },
-            {label:'R波振幅', value:f.mean_r_amplitude_mv?f.mean_r_amplitude_mv+' mV':'—', sub:'信号强度' },
-            {label:'LF/HF', value:f.lf_hf_ratio||'—', sub:'交感/副交感' },
-            {label:'RR变异系数', value:f.rr_cv?(f.rr_cv*100).toFixed(1)+'%':'—', sub:'节律规整度' },
-        ];
-        document.getElementById('metrics-list').innerHTML = metrics.map(m=>`
-            <div class="flex justify-between items-center py-2 border-b border-gray-50">
-                <div><span class="text-sm font-medium">${m.label}</span><p class="text-xs text-gray-400">${m.sub}</p></div>
-                <span class="font-bold text-sm">${m.value}</span>
-            </div>`).join('');
-
-        // Radar
-        const radar = data.radar;
-        if (radarChart) radarChart.destroy();
-        radarChart = new Chart(document.getElementById('radar-chart'), {
-            type:'radar',
-            data:{
-                labels:['频率\n(迟/数)','节律\n(促/结/代)','振幅\n(洪/细)','张力\n(弦/缓)','流畅度\n(滑/涩)'],
-                datasets:[{data:[radar.rate,radar.rhythm,radar.amplitude,radar.tension,radar.smoothness],
-                    backgroundColor:'rgba(139,37,0,0.1)',borderColor:'rgba(139,37,0,0.6)',borderWidth:2,pointBackgroundColor:'#8B2500',pointRadius:4}]
-            },
-            options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},
-                scales:{r:{beginAtZero:true,max:1,ticks:{display:false},grid:{color:'rgba(0,0,0,0.06)'},pointLabels:{font:{size:11}}}}}
-        });
+        // Feature Analysis
+        renderFeatureChart(data);
 
 
     }
@@ -1192,6 +1189,12 @@
 
         const c = determinePulseConstitution(features);
         const section = document.getElementById('constitution-section');
+        // Check if primary pulse is 缓脉 — skip constitution display
+        const primaryPulse = data.candidates && data.candidates.length > 0 ? data.candidates[0] : null;
+        if (primaryPulse && primaryPulse.type_cn === '缓脉') {
+            section.classList.add('hidden');
+            return;
+        }
         section.classList.remove('hidden');
 
         document.getElementById('const-type').textContent = c.typeName;
@@ -1236,42 +1239,101 @@
     // Store last analysis for copy
     let _lastAnalysisData = null;
 
-    // ========== 五维健康评分 ==========
+    // ========== 五行健康评分 ==========
     function renderHealthScore(data) {
         const radar = data.radar;
         if (!radar) return;
 
-        // Compute scores (0-100, higher = healthier)
-        const rateScore = Math.round((1 - radar.rate) * 100);
-        const rhythmScore = Math.round((1 - radar.rhythm) * 100);
-        const ampScore = Math.round((1 - radar.amplitude) * 100);
-        const tensionScore = Math.round((1 - radar.tension) * 100);
-        const smoothScore = Math.round((1 - radar.smoothness) * 100);
-        const totalScore = Math.round((rateScore + rhythmScore + ampScore + tensionScore + smoothScore) / 5);
+        // Compute individual element scores (0-100, higher = healthier)
+        const woodScore = Math.round((1 - radar.rhythm) * 100);    // 木 = 肝 · 条达疏泄 = 节律
+        const fireScore = Math.round((1 - radar.rate) * 100);      // 火 = 心 · 温煦推动 = 频率
+        const earthScore = Math.round((1 - radar.tension) * 100);  // 土 = 脾 · 承载化运 = 张力
+        const metalScore = Math.round((1 - radar.amplitude) * 100); // 金 = 肺 · 宣降收敛 = 振幅
+        const waterScore = Math.round((1 - radar.smoothness) * 100); // 水 = 肾 · 滋润藏精 = 流畅度
+        const totalScore = Math.round((woodScore + fireScore + earthScore + metalScore + waterScore) / 5);
 
-        document.getElementById('total-score').textContent = totalScore;
+        // Health age: score 100 → 20岁, score 0 → 100岁
+        const healthAge = Math.max(20, Math.min(100, Math.round(100 - totalScore * 0.8)));
+
+        document.getElementById('total-score').textContent = healthAge + '岁';
         let level = '平和质';
         if (totalScore < 50) level = '需调理';
         else if (totalScore < 70) level = '偏颇质';
-        document.getElementById('health-level').textContent = level;
+        document.getElementById('health-level').textContent = `综合评分 ${totalScore}/100 · ${level}`;
 
         const dims = [
-            { name: '频率', sub: '迟/数', score: rateScore, color: '#06b6d4' },
-            { name: '节律', sub: '促/结/代', score: rhythmScore, color: '#10b981' },
-            { name: '振幅', sub: '洪/细', score: ampScore, color: '#f59e0b' },
-            { name: '张力', sub: '弦/缓', score: tensionScore, color: '#f43f5e' },
-            { name: '流畅度', sub: '滑/涩', score: smoothScore, color: '#a855f7' },
+            { name: '木', sub: '肝 · 疏泄', score: woodScore, color: '#2D8B4E', organ: '肝' },
+            { name: '火', sub: '心 · 推动', score: fireScore, color: '#C0392B', organ: '心' },
+            { name: '土', sub: '脾 · 运化', score: earthScore, color: '#B8860B', organ: '脾' },
+            { name: '金', sub: '肺 · 宣降', score: metalScore, color: '#7F8C8D', organ: '肺' },
+            { name: '水', sub: '肾 · 封藏', score: waterScore, color: '#2471A3', organ: '肾' },
         ];
 
         document.getElementById('score-bars').innerHTML = dims.map(d => `
             <div class="flex items-center gap-3">
-                <span class="w-16 text-sm opacity-80">${d.name}</span>
+                <span class="w-8 text-lg font-bold tcm-title" style="color:${d.color}">${d.name}</span>
+                <span class="w-20 text-xs opacity-60">${d.sub}</span>
                 <div class="flex-1 h-2.5 rounded-full bg-white/10 overflow-hidden">
                     <div class="h-full rounded-full transition-all duration-700" style="width:${d.score}%; background:${d.color};"></div>
                 </div>
                 <span class="w-10 text-right text-sm font-bold" style="color:${d.color}">${d.score}</span>
             </div>
         `).join('');
+    }
+
+    // ========== 特征分析图 ==========
+    let featureChart = null;
+    function renderFeatureChart(data) {
+        const f = data.features;
+        if (!f) return;
+
+        // Feature cards with key metrics
+        const cards = [
+            { label: '心率', value: (f.mean_hr_bpm||0).toFixed(0), unit: 'bpm', range: `${f.min_hr_bpm||'—'}-${f.max_hr_bpm||'—'}` },
+            { label: 'HRV', value: (f.sdnn_ms||0).toFixed(0), unit: 'ms', range: 'SDNN' },
+            { label: 'R波振幅', value: (f.mean_r_amplitude_mv||0).toFixed(2), unit: 'mV', range: '信号强度' },
+            { label: '心搏数', value: f.total_beats||0, unit: '次', range: `${f.duration_sec||0}秒` },
+        ];
+        document.getElementById('feature-cards').innerHTML = cards.map(c => `
+            <div class="rounded-xl p-4 text-center" style="background: linear-gradient(135deg, #FDF8F0 0%, #F5EDE0 100%); border: 1px solid #E8DDD0;">
+                <p class="text-xs text-gray-500">${c.label}</p>
+                <p class="text-2xl font-bold tcm-title" style="color:#8B2500">${c.value}</p>
+                <p class="text-xs text-gray-400">${c.unit} · ${c.range}</p>
+            </div>
+        `).join('');
+
+        // Bar chart of feature deviations
+        const features = [
+            { label: '心率偏离', value: Math.min(100, Math.abs(f.mean_hr_bpm - 72) / 40 * 100), color: '#C0392B' },
+            { label: '节律变异', value: Math.min(100, (f.rr_cv || 0) * 500), color: '#2D8B4E' },
+            { label: '振幅稳定', value: Math.min(100, f.mean_r_amplitude_mv > 0 ? (1 - Math.min(1, Math.abs(f.mean_r_amplitude_mv - 1.0) / 1.0)) * 100 : 50), color: '#7F8C8D' },
+            { label: 'HRV水平', value: Math.min(100, (f.sdnn_ms || 0) / 120 * 100), color: '#2471A3' },
+            { label: '副交感', value: Math.min(100, (f.rmssd_ms || 0) / 60 * 100), color: '#B8860B' },
+            { label: 'Poincaré', value: Math.min(100, (f.poincare_sd1_ms || 0) / 40 * 100), color: '#8E44AD' },
+        ];
+
+        if (featureChart) featureChart.destroy();
+        featureChart = new Chart(document.getElementById('feature-chart'), {
+            type: 'bar',
+            data: {
+                labels: features.map(f => f.label),
+                datasets: [{
+                    data: features.map(f => Math.round(f.value)),
+                    backgroundColor: features.map(f => f.color + '88'),
+                    borderColor: features.map(f => f.color),
+                    borderWidth: 1,
+                    borderRadius: 4,
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, max: 100, ticks: { display: false }, grid: { color: 'rgba(0,0,0,0.04)' } },
+                    x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+                }
+            }
+        });
     }
 
     // ========== 医疗级 ECG ==========
@@ -1368,13 +1430,14 @@
         const c = d.candidates || [];
         const r = d.radar;
 
-        // Compute scores
-        const rateScore = Math.round((1 - r.rate) * 100);
-        const rhythmScore = Math.round((1 - r.rhythm) * 100);
-        const ampScore = Math.round((1 - r.amplitude) * 100);
-        const tensionScore = Math.round((1 - r.tension) * 100);
-        const smoothScore = Math.round((1 - r.smoothness) * 100);
-        const totalScore = Math.round((rateScore + rhythmScore + ampScore + tensionScore + smoothScore) / 5);
+        // Compute 五行 scores
+        const woodScore = Math.round((1 - r.rhythm) * 100);
+        const fireScore = Math.round((1 - r.rate) * 100);
+        const earthScore = Math.round((1 - r.tension) * 100);
+        const metalScore = Math.round((1 - r.amplitude) * 100);
+        const waterScore = Math.round((1 - r.smoothness) * 100);
+        const totalScore = Math.round((woodScore + fireScore + earthScore + metalScore + waterScore) / 5);
+        const healthAge = Math.max(20, Math.min(100, Math.round(100 - totalScore * 0.8)));
 
         // Constitution
         const features = {
@@ -1391,13 +1454,13 @@
         let text = `📋 岐黄脉镜 · AI中医脉诊数据\n`;
         text += `${'─'.repeat(30)}\n\n`;
 
-        // Scores
-        text += `▶ 五维健康评分: ${totalScore}/100 (${totalScore >= 70 ? '平和质' : totalScore >= 50 ? '偏颇质' : '需调理'})\n`;
-        text += `  · 频率: ${rateScore}/100\n`;
-        text += `  · 节律: ${rhythmScore}/100\n`;
-        text += `  · 振幅: ${ampScore}/100\n`;
-        text += `  · 张力: ${tensionScore}/100\n`;
-        text += `  · 流畅度: ${smoothScore}/100\n\n`;
+        // 五行 scores
+        text += `▶ 健康年龄: ${healthAge}岁 (综合评分 ${totalScore}/100)\n`;
+        text += `  · 木(肝): ${woodScore} — 疏泄\n`;
+        text += `  · 火(心): ${fireScore} — 推动\n`;
+        text += `  · 土(脾): ${earthScore} — 运化\n`;
+        text += `  · 金(肺): ${metalScore} — 宣降\n`;
+        text += `  · 水(肾): ${waterScore} — 封藏\n\n`;
 
         // Pulse diagnosis
         if (c.length > 0) {
@@ -1405,9 +1468,6 @@
             text += `  主脉: ${c[0].type_cn} (${c[0].type_en}) — 置信度 ${Math.round(c[0].confidence*100)}%\n`;
             text += `  判定依据: ${c[0].evidence}\n`;
             text += `  临床意义: ${c[0].clinical_meaning}\n`;
-            if (c.length > 1) {
-                text += `  兼脉: ${c.slice(1).filter(x=>x.confidence>=0.45).map(x=>`${x.type_cn}(${Math.round(x.confidence*100)}%)`).join('、') || '无'}\n`;
-            }
             text += `\n`;
         }
 
@@ -1432,12 +1492,12 @@
 
         text += `${'─'.repeat(30)}\n`;
         text += `⚠️ 以上数据基于Apple Watch ECG传感器提取，仅供健康参考，不构成医疗诊断。\n\n`;
-        text += `请基于以上中医脉诊数据，从中医角度进行综合分析，包括：\n`;
-        text += `1. 当前身体状态评估\n`;
-        text += `2. 主要证型判断\n`;
-        text += `3. 脏腑功能分析\n`;
-        text += `4. 调养建议（饮食、作息、运动）\n`;
-        text += `5. 需要注意的健康风险\n\n`;
+        text += `请基于以上中医脉诊数据，从中医角度进行综合分析...\n`;
+        text += `1. ...\n`;
+        text += `2. ...\n`;
+        text += `3. ...\n`;
+        text += `4. ...\n`;
+        text += `5. ...\n\n`;
         text += `${'─'.repeat(30)}\n`;
         text += `🔗 GitHub: https://github.com/SPA3K/tcm-pulse-web`;
 

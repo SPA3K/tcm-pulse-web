@@ -1437,7 +1437,9 @@
         text += `2. 主要证型判断\n`;
         text += `3. 脏腑功能分析\n`;
         text += `4. 调养建议（饮食、作息、运动）\n`;
-        text += `5. 需要注意的健康风险`;
+        text += `5. 需要注意的健康风险\n\n`;
+        text += `${'─'.repeat(30)}\n`;
+        text += `🔗 GitHub: https://github.com/SPA3K/tcm-pulse-web`;
 
         navigator.clipboard.writeText(text).then(() => {
             const btn = document.getElementById('copy-btn-top');
